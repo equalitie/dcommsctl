@@ -5,15 +5,8 @@ This is definitely not production quality but mostly a result of explorative pro
 # How to run
 
 Requirements
- * Podman
  * Go 
  * A web browser
-
-Run podman as a process:
-
-```
-podman --log-level=debug system service -t0
-```
 
 Run the backend
 
@@ -26,10 +19,20 @@ Open url `http://localhost:8080/` in any browser
 
 # What is implemented
 
-You can run two hard-coded services (mastodon and peertube), you can get environment variables from peertube. Mastodon fails to do that due to one of the containers, I did not have time to debug that.
+Right now it's an application that let's you connect via SSH to a deployment target of your choice (VPS-only for now). It assumes the deployment target to be a Debian machine. It install everything required to run dcomms project, copies all the compose files required and calls a modified install script.
 
-Panic button for now only acts as a "compose down both services".
+You can connect to a VPS assuming you have a SSH-agent running and ssh key added. You specify host, username and port for SSH connection on the main page of Web UI at `http://localhost:8080/`
 
-You can open an environment file for each service for edit and save it (and then you have to manually restart the service).
+A lot of the things are hardcoded for now and only one deployment target is managed at the same time.
 
-The page does not check the initial state of services so they'll always be in "off" state after reload. But it subscribes to changes in this state, so the state (red or green light) changes whenever backend turns the service on or off.
+The dcomms-docker-compose project is included not as a git submodule because of changes to the scripts. There's a temporary copy of install.sh script from that repo called install_podman.sh which is tailored for podman use.
+
+Due to a bug podman-compose is currently not found when running via ssh.
+
+# TODO
+
+* debug install_podman.sh (right now only CENO, parts of Peertube and Mastodon are succesfully installed, Matrix setup hangs when running podman-compose up) 
+* implement choice of services you want to install
+* make it possible to create new deployment targets and check for the status of running services
+* actually handle running and stopping of podman services
+* fetch status of all services
