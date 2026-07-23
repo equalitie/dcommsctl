@@ -1,0 +1,118 @@
+:root {
+    --color-bright-blue: #0000dd;
+    --color-bright-purple:#4c01be;
+    --color-red: #800101;
+    --color-orange: #c46b32;
+    --color-pink: #d030b0;
+    --color-green: #7cfe6f;
+    --color-yellow: #fdfb69;
+}
+
+@keyframes blink-animation {
+    50% {
+        background: transparent;
+        color: white;
+    }
+}
+
+body {
+    color: #000000;
+    font-family: sans;
+}
+
+.page-wrapper {
+    display: flex;
+    flex-direction: row;
+}
+
+.left-side, .right-side {
+    width: 50%;
+    box-sizing: border-box;
+    padding: 0 1rem;
+}
+
+button {
+    padding: 1rem 1rem;
+    border: none;
+    outline: none;
+    background: transparent;
+    line-height: 130%;
+    cursor: pointer;
+}
+
+button:hover {
+    background-image: linear-gradient(to top right, var(--color-bright-blue) 20%, var(--color-bright-purple) 90%);
+}
+
+.service {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+
+#editor-area {
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    color: white;
+    background-color: black;
+    border: none;
+    outline: none;
+}
+
+#env-info {
+    font-family: monospace;
+    line-height: 300%;
+}
+
+.panic-btn {
+    text-transform: uppercase;
+    background-image: linear-gradient(to top right, var(--color-bright-blue) 20%, var(--color-bright-purple) 90%);
+}
+
+.host-info {
+    transition: height 1s linear;
+}
+
+.border-gradient {
+    border: 1px solid;
+    border-image-slice: 1;
+    border-width: 1px;
+    margin: 1rem 0;
+    padding: 0.5rem 0.8rem;
+    transition: height 1s linear;
+}
+
+.border-gradient-purple {
+    border-image-source: linear-gradient(to top right, var(--color-bright-blue) 20%, var(--color-bright-purple) 90%);
+}
+.border-gradient-pink {
+    border-image-source: linear-gradient(to top right, var(--color-bright-purple) 20%, var(--color-pink) 90%);
+}
+.border-gradient-green {
+    border-image-source: linear-gradient(to top right, var(--color-green) 60%, var(--color-yellow) 90%);
+}
+
+.service-status-wrapper {
+    filter: blur(1px);
+}
+
+.service-on {
+    display: block;
+    transition: background-color 1s ease-out;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 100%;
+    background-color: var(--color-green);
+}
+
+.service-off {
+    display: block;
+    transition: background-color 0.5s ease-in;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 100%;
+    background-color: var(--color-red);
+}

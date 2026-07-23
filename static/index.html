@@ -1,0 +1,47 @@
+<html>
+	<head>
+        <link rel="stylesheet" href="/index.css"/>
+	</head>
+	<body>
+        <div class="page-wrapper">
+            <div>
+                <button class="deployment_targets_add">Add a deployment target</button>
+
+                <div>
+                    <h2>Install to a VPS</h2>
+                    <form class="form-install-vps" action="/install" method="POST">
+                        <div>
+                            <label for="host">Host</label>
+                            <input name="host" type="text" value="172.232.204.97" />
+                            <label for="port">Port</label>
+                            <input name="port" type="number" value="22"/>
+                        </div>
+                        <div>
+                            <label for="username">User on this machine</label>
+                            <input name="username" type="text" value="dcomms" />
+                        </div>
+
+                        <div>
+                            <label for="domainname">Domain name you've registered</label>
+                            <input name="domainname" type="text" />
+                        </div>
+
+                        <div>
+                            <label for="matrix-on">Install Matrix</label>
+                            <input name="matrix-on" type="checkbox" />
+                        </div>
+
+                        <button type="submit">Install</button>
+                        <button>Test connection</button>
+                    </form>
+                </div>
+
+                <div class="deployment_targets_list">
+
+                </div>
+
+            </div>
+        </div>
+        <script type="module" src="/index.js"></script>
+	</body>
+</html>
