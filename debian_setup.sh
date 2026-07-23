@@ -6,7 +6,7 @@ sudo apt-get update
 
 sudo apt-get install -y dnsutils curl aria2 tor 
 
-if [ -z "$DCOMMS_USE_PODMAN"]; then
+if [ -z "$DCOMMS_USE_PODMAN" ]; then
     sudo apt-get install -y podman python3 python3-pip pipx firewalld
 
     pipx install podman-compose

@@ -1,0 +1,241 @@
+// this is a file with functions written at different stages for stuff that did not end up in the project
+// some of this might come back, some not, but these are just reference implementations of ideas I was toying with
+// this is not supposed to be a compileable file
+
+// This is basically copy-pasted from guerilla websocket chat example
+
+var (
+	newline = []byte{'\n'}
+	space   = []byte{' '}
+)
+
+const (
+	// Time allowed to write a message to the peer.
+	writeWait = 10 * time.Second
+	// Time allowed to read the next pong message from the peer.
+	pongWait = 60 * time.Second
+	// Send pings to peer with this period. Must be less than pongWait.
+	pingPeriod = (pongWait * 9) / 10
+	// Maximum message size allowed from peer.
+	maxMessageSize = 512
+)
+
+func newWebSocketHub() *WebSocketHub {
+	return &WebSocketHub{
+		broadcast:  make(chan []byte),
+		register:   make(chan *Client),
+		unregister: make(chan *Client),
+		clients:    make(map[*Client]bool),
+	}
+}
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+}
+
+
+func (h *WebSocketHub) run() {
+	for {
+		select {
+		case client := <-h.register:
+			h.clients[client] = true
+		case client := <-h.unregister:
+			if _, ok := h.clients[client]; ok {
+				delete(h.clients, client)
+				close(client.send)
+			}
+		case message := <-h.broadcast:
+			for client := range h.clients {
+				select {
+				case client.send <- message:
+				default:
+					close(client.send)
+					delete(h.clients, client)
+				}
+			}
+		}
+	}
+}
+
+func (c *Client) writePump() {
+	ticker := time.NewTicker(pingPeriod)
+	defer func() {
+		ticker.Stop()
+		c.conn.Close()
+	}()
+	for {
+		select {
+		case message, ok := <-c.send:
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if !ok {
+				// The hub closed the channel.
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			w, err := c.conn.NextWriter(websocket.TextMessage)
+			if err != nil {
+				return
+			}
+			w.Write(message)
+
+			// Add queued chat messages to the current websocket message.
+			n := len(c.send)
+			for i := 0; i < n; i++ {
+				w.Write(newline)
+				w.Write(<-c.send)
+			}
+
+			if err := w.Close(); err != nil {
+				return
+			}
+		case <-ticker.C:
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
+	}
+}
+
+// Client is a middleman between the websocket connection and the hub.
+type Client struct {
+	hub *WebSocketHub
+
+	// The websocket connection.
+	conn *websocket.Conn
+
+	// Buffered channel of outbound messages.
+	send chan []byte
+}
+
+type WebSocketHub struct {
+	// Registered clients.
+	clients map[*Client]bool
+	// Inbound messages from the clients.
+	broadcast chan []byte
+	// Register requests from the clients.
+	register chan *Client
+	// Unregister requests from clients.
+	unregister chan *Client
+}
+
+
+func wsServe(hub *WebSocketHub, w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
+	client.hub.register <- client
+
+	go client.writePump()
+}
+
+	mux.HandleFunc("GET /ws", func(w http.ResponseWriter, r *http.Request) {
+		wsServe(hub, w, r)
+	})
+
+func debugInfo(app Application) {
+	listRes, err := containers.List(app.ctx, &containers.ListOptions{})
+
+	if err != nil {
+		fmt.Println("List error", err)
+		os.Exit(1)
+	}
+
+	for _, c := range listRes {
+		fmt.Println("Container name: ", c.Names[0])
+	}
+}
+
+func httpGetBackup(app Application, w http.ResponseWriter, r *http.Request) {
+	backupScriptBuild(app)
+}
+
+func backupScriptBuild(app Application) ([]byte, error) {
+	var buf bytes.Buffer
+
+	for _, service := range app.systemCfg.Services {
+		for _, path := range service.ConfigFiles {
+			buf.WriteString(path.Path + "\n")
+		}
+
+	}
+
+	return buf.Bytes(), nil
+}
+
+func sshConnect(c ConnectionInfo) error {
+
+	socket := os.Getenv("SSH_AUTH_SOCK")
+
+	conn, err := net.Dial("unix", socket)
+
+	if err != nil {
+		fmt.Errorf("unable to connect to ssh-agent socket: %v", err)
+	}
+
+	agentClient := agent.NewClient(conn)
+
+	config := &ssh.ClientConfig{
+		User: c.User,
+		Auth: []ssh.AuthMethod{
+			ssh.PublicKeysCallback(agentClient.Signers),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+
+	client, err := ssh.Dial("tcp", c.Host+":"+c.Port, config)
+
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+
+	session, err := client.NewSession()
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+
+	var b bytes.Buffer
+	session.Stdout = &b
+
+	if err := session.Run("touch ~/dcomms/test"); err != nil {
+		return err
+	}
+
+	sftpClient, err := sftp.NewClient(client)
+
+	if err != nil {
+		return fmt.Errorf("Failed to init sftp connection %s", err)
+	}
+
+	if err := sftpCopy(sftpClient, "./dcomms-docker-compose/conf/compose/synapse.docker-compose.yml", "/home/dcomms/dcomms/synapse.docker-compose.yml"); err != nil {
+		return fmt.Errorf("Failed to copy file: %s", err)
+	}
+
+	fmt.Println(b.String())
+
+	return nil
+}
+
+func pullImages(ctx context.Context, cfg SystemConfig) error {
+	if cfg.Peertube {
+		_, err := images.Pull(ctx, "postgres:18", nil)
+		if err != nil {
+			return err
+		}
+
+		_, err = images.Pull(ctx, "chocobozzz/peertube:production-bookworm", nil)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+

@@ -28,7 +28,10 @@ import (
 	// "github.com/gorilla/websocket"
 )
 
-// we have limits on RAM for synapse postgres 512Mb
+// NOTE(max): this is currently the main implementation file
+//   everything here is considered important for implementation
+//   everything else that I worked on as ideas that are not used right now moved to other go files around
+//   some of these files are compiled into the app some don't
 
 // some concepts:
 //  - target (deployment target) is either VPS or cloud service
@@ -79,22 +82,6 @@ type Application struct {
 	ctx       context.Context
 	systemCfg SystemConfig
 }
-
-const (
-	// Time allowed to write a message to the peer.
-	writeWait = 10 * time.Second
-	// Time allowed to read the next pong message from the peer.
-	pongWait = 60 * time.Second
-	// Send pings to peer with this period. Must be less than pongWait.
-	pingPeriod = (pongWait * 9) / 10
-	// Maximum message size allowed from peer.
-	maxMessageSize = 512
-)
-
-var (
-	newline = []byte{'\n'}
-	space   = []byte{' '}
-)
 
 func sftpCopy(client *sftp.Client, srcPath, dstPath string) error {
 	srcFile, err := os.Open(srcPath)
@@ -466,7 +453,7 @@ func postRunInstallScript(app Application, w http.ResponseWriter, r *http.Reques
 	pathToDCommsInstall := pathToDComms + "/install_podman.sh"
 
 	// FIXME: temporary PATH setting
-	err = sshExecCommand(app.conn, `cd `+pathToDComms+` && chmod +x `+pathToDCommsInstall+` && PATH=$PATH:~/.local/bin DWEB_DOMAIN=`+app.conn.Host+` CHOICES="1 5" sudo `+pathToDCommsInstall)
+	err = sshExecCommand(app.conn, `cd `+pathToDComms+` && chmod +x `+pathToDCommsInstall+` && PATH=$PATH:~/.local/bin DWEB_DOMAIN=`+app.conn.Domain+` CHOICES="1" `+pathToDCommsInstall)
 	if err != nil {
 		fmt.Println("Failed to exec install script:", err)
 		w.WriteHeader(http.StatusInternalServerError)
