@@ -239,3 +239,55 @@ func pullImages(ctx context.Context, cfg SystemConfig) error {
 	return nil
 }
 
+func httpPostEditFile(app Application, w http.ResponseWriter, r *http.Request) {
+	serviceID := r.PathValue("id")
+	serviceCfg, found := app.systemCfg.Services[serviceID]
+
+	if !found {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Config not found")
+		return
+	}
+	// FIXME: pick what config we are editing
+	fileName := serviceCfg.ConfigFiles[0].Path
+
+	data := r.FormValue("file_contents")
+
+	f, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE, 0666)
+
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Config write problem", err)
+		return
+	}
+	defer f.Close()
+
+	f.WriteString(data)
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func httpGetEditFile(app Application, w http.ResponseWriter, r *http.Request) {
+	serviceID := r.PathValue("id")
+
+	serviceCfg, found := app.systemCfg.Services[serviceID]
+
+	if !found {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Config not found")
+		return
+	}
+	// FIXME: pick what config we are editing
+	fileName := serviceCfg.ConfigFiles[0].Path
+
+	bytes, err := os.ReadFile(fileName)
+
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Config fetch problem", err)
+		return
+	}
+
+	w.Write(bytes)
+}
+

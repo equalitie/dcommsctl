@@ -9,6 +9,8 @@ SYN_V='v1.140.0'
 MAS_V='v4.5'
 
 set -e
+# For debug purposes
+set -x
 # Directory to save dcomms config files in
 DCOMMS_DIR=$PWD
 
@@ -75,7 +77,7 @@ matrix_config () {
         -e SYNAPSE_SERVER_NAME=matrix.$DWEB_DOMAIN \
         -e SYNAPSE_REPORT_STATS=no \
         -e SYNAPSE_DATA_DIR=/data \
-    matrixdotorg/synapse:$SYN_V generate 2>/dev/null || true
+    matrixdotorg/synapse:$SYN_V generate 2>/dev/null
 
     sudo chown -R $USER:$USER $DCOMMS_DIR/conf/synapse/
     sudo chown -R $USER:$USER $DCOMMS_DIR/conf/element/

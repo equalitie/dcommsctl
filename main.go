@@ -153,7 +153,7 @@ func copyProject(app Application) error {
 	conn, err := net.Dial("unix", socket)
 
 	if err != nil {
-		fmt.Errorf("unable to connect to ssh-agent socket: %v", err)
+		return fmt.Errorf("unable to connect to ssh-agent socket: %v", err)
 	}
 
 	agentClient := agent.NewClient(conn)
@@ -193,7 +193,7 @@ func sshExecCommand(c DeploymentTargetInfo, cmd string) error {
 	conn, err := net.Dial("unix", socket)
 
 	if err != nil {
-		fmt.Errorf("unable to connect to ssh-agent socket: %v", err)
+		return fmt.Errorf("unable to connect to ssh-agent socket: %v", err)
 	}
 
 	agentClient := agent.NewClient(conn)
@@ -209,13 +209,13 @@ func sshExecCommand(c DeploymentTargetInfo, cmd string) error {
 	client, err := ssh.Dial("tcp", c.Host+":"+c.Port, config)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to dial ssh: %v", err)
 	}
 	defer client.Close()
 
 	session, err := client.NewSession()
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to create ssh session: %s", err)
 	}
 	defer session.Close()
 
@@ -235,10 +235,17 @@ func sshExecCommand(c DeploymentTargetInfo, cmd string) error {
 func remoteOsStatus(app Application) []byte {
 	var buf bytes.Buffer
 
-	memCommand := "grep MemTotal /proc/meminfo |tr -s ' ' |cut -d ' ' -f2"
-	// findCommand := "whereis torify"
-	if err := sshExecCommand(app.conn, memCommand); err != nil {
-		return nil
+	commands := []string{
+		"grep MemTotal /proc/meminfo |tr -s ' ' |cut -d ' ' -f2",
+		"free -h",
+		"df -h",
+		"uptime",
+	}
+
+	for _, cmd := range commands {
+		if err := sshExecCommand(app.conn, cmd); err != nil {
+			return nil
+		}
 	}
 
 	return buf.Bytes()
@@ -343,58 +350,6 @@ func serviceStopAll(app Application) {
 
 func httpPostMatrixInstall(app Application, w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Ok"))
-}
-
-func httpGetEditFile(app Application, w http.ResponseWriter, r *http.Request) {
-	serviceID := r.PathValue("id")
-
-	serviceCfg, found := app.systemCfg.Services[serviceID]
-
-	if !found {
-		w.WriteHeader(http.StatusInternalServerError)
-		log.Println("Config not found")
-		return
-	}
-	// FIXME: pick what config we are editing
-	fileName := serviceCfg.ConfigFiles[0].Path
-
-	bytes, err := os.ReadFile(fileName)
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		log.Println("Config fetch problem", err)
-		return
-	}
-
-	w.Write(bytes)
-}
-
-func httpPostEditFile(app Application, w http.ResponseWriter, r *http.Request) {
-	serviceID := r.PathValue("id")
-	serviceCfg, found := app.systemCfg.Services[serviceID]
-
-	if !found {
-		w.WriteHeader(http.StatusInternalServerError)
-		log.Println("Config not found")
-		return
-	}
-	// FIXME: pick what config we are editing
-	fileName := serviceCfg.ConfigFiles[0].Path
-
-	data := r.FormValue("file_contents")
-
-	f, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE, 0666)
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		log.Println("Config write problem", err)
-		return
-	}
-	defer f.Close()
-
-	f.WriteString(data)
-
-	w.WriteHeader(http.StatusOK)
 }
 
 func postTestInstallation(app Application, w http.ResponseWriter, r *http.Request) {
@@ -550,12 +505,6 @@ func main() {
 	})
 	mux.HandleFunc("POST /target/create", func(w http.ResponseWriter, r *http.Request) {
 		// FIXME: call for target creation
-	})
-	mux.HandleFunc("GET /target/{target}/config/{id}", func(w http.ResponseWriter, r *http.Request) {
-		httpGetEditFile(app, w, r)
-	})
-	mux.HandleFunc("POST /target/{target}/config/{id}", func(w http.ResponseWriter, r *http.Request) {
-		httpPostEditFile(app, w, r)
 	})
 	mux.HandleFunc("GET /target/{target}/env/{id}", func(w http.ResponseWriter, r *http.Request) {
 		httpGetEnv(app, w, r)
