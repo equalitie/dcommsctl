@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+	"strconv"
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -78,7 +80,9 @@ type DeploymentTargetInfo struct {
 }
 
 type Application struct {
-	conn      DeploymentTargetInfo
+	conn DeploymentTargetInfo
+	// int as key for persistent IDs
+	targets   map[int]DeploymentTargetInfo
 	ctx       context.Context
 	systemCfg SystemConfig
 }
@@ -101,6 +105,67 @@ func sftpCopy(client *sftp.Client, srcPath, dstPath string) error {
 	}
 
 	return nil
+}
+
+func targetsSave(app Application) error {
+	f, err := os.Create("./targets.csv")
+
+	if err != nil {
+		return err
+	}
+
+	defer f.Close()
+	w := csv.NewWriter(f)
+	for id, target := range app.targets {
+		if err := w.Write([]string{strconv.Itoa(id), target.Host, target.Port, target.User, target.Domain}); err != nil {
+			fmt.Println(err)
+		}
+	}
+
+	w.Flush()
+
+	return nil
+}
+
+func targetsLoad(app Application) error {
+	f, err := os.Open("./targets.csv")
+
+	if err != nil {
+		return err
+	}
+
+	defer f.Close()
+	r := csv.NewReader(f)
+
+	recs, err := r.ReadAll()
+
+	for _, rec := range recs {
+		id, err := strconv.Atoi(rec[0])
+
+		if err != nil {
+			return err
+		}
+
+		host := rec[1]
+		port := rec[2]
+		user := rec[3]
+		domain := rec[4]
+
+		app.targets[id] = DeploymentTargetInfo{
+			Host: host,
+			Port: port,
+			User: user,
+			Domain: domain,
+		}
+
+	}
+	return nil
+}
+
+func NewApplication() Application {
+	return Application{
+		targets: make(map[int]DeploymentTargetInfo),
+	}
 }
 
 func copyFolder(client *sftp.Client, src, dst string) error {
@@ -177,6 +242,7 @@ func copyProject(app Application) error {
 	if err != nil {
 		return fmt.Errorf("Failed to init sftp connection: %s", err)
 	}
+	defer sftpClient.Close()
 
 	if err := copyFolder(sftpClient, pathToDcomms, "/home/"+app.conn.User+"/dcomms/setup"); err != nil {
 		return fmt.Errorf("Fail to copy files: %s", err)
@@ -341,29 +407,73 @@ func httpPostPanic(app Application, w http.ResponseWriter, r *http.Request) {
 }
 
 func serviceStopAll(app Application) {
-	for serviceID, _ := range app.systemCfg.Services {
+	for serviceID := range app.systemCfg.Services {
 		if err := remoteServiceDown(app, serviceID); err != nil {
 			log.Printf("Failed to bring compose down: %s", err)
 		}
 	}
 }
 
-func httpPostMatrixInstall(app Application, w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Ok"))
-}
-
 func postTestInstallation(app Application, w http.ResponseWriter, r *http.Request) {
 
 }
 
-func postRunStartupScript(app Application, w http.ResponseWriter, r *http.Request) {
+func httpPostTargetCreate(app Application, w http.ResponseWriter, r *http.Request) {
+	maxId := 0
 
+	// for now we just pick the biggest ID
+	for id := range app.targets {
+		if id > maxId {
+			maxId = id
+		}
+	}
+
+	// FIXME: properly process form values
+	app.targets[maxId+1] = DeploymentTargetInfo{
+		Host:   r.FormValue("host"),
+		User:   r.FormValue("username"),
+		Port:   r.FormValue("port"),
+		Domain: r.FormValue("domainname"),
+	}
+
+	targetsSave(app)
+
+	fmt.Println("Target created. ID:", maxId + 1)
+
+	// TODO: return JSON representation of the target from which client can construct
 }
 
-func postRunInstallScript(app Application, w http.ResponseWriter, r *http.Request) {
+func httpPostRunStartupScript(app Application, w http.ResponseWriter, r *http.Request) {
 	// depTargetID := r.PathValue("target")
-	// FIXME: properly process those
-	// FIXME: we only have one connection here, do it properly with connection IDs and a list of connections
+	// we are gonna set this up in /target/create
+	app.conn = DeploymentTargetInfo{
+		Host:   r.FormValue("host"),
+		User:   r.FormValue("username"),
+		Port:   r.FormValue("port"),
+		Domain: r.FormValue("domainname"),
+	}
+
+	if err := copyProject(app); err != nil {
+		fmt.Println("Failed to copy project files:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	pathToDComms := "/home/" + app.conn.User + "/dcomms/setup"
+	pathToDCommsRun := pathToDComms + "/run.sh"
+
+	err := sshExecCommand(app.conn, `cd `+pathToDComms+` && chmod +x `+pathToDCommsRun+` && PATH=$PATH:~/.local/bin `+pathToDCommsRun)
+	if err != nil {
+		fmt.Println("Failed to exec install script:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	// w.Write(output)
+}
+
+func httpPostRunInstallScript(app Application, w http.ResponseWriter, r *http.Request) {
+	// depTargetID := r.PathValue("target")
+	// we are gonna set this up in /target/create
 	app.conn = DeploymentTargetInfo{
 		Host:   r.FormValue("host"),
 		User:   r.FormValue("username"),
@@ -452,7 +562,8 @@ func main() {
 	rootContext := context.Background()
 	serverError := make(chan error, 1)
 	stop := make(chan os.Signal, 1)
-	app := Application{}
+	app := NewApplication()
+	targetsLoad(app)
 
 	app.ctx = rootContext
 
@@ -505,6 +616,7 @@ func main() {
 	})
 	mux.HandleFunc("POST /target/create", func(w http.ResponseWriter, r *http.Request) {
 		// FIXME: call for target creation
+		httpPostTargetCreate(app, w, r)
 	})
 	mux.HandleFunc("GET /target/{target}/env/{id}", func(w http.ResponseWriter, r *http.Request) {
 		httpGetEnv(app, w, r)
@@ -517,7 +629,10 @@ func main() {
 		httpPostServiceStart(app, w, r)
 	})
 	mux.HandleFunc("POST /target/{target}/install", func(w http.ResponseWriter, r *http.Request) {
-		postRunInstallScript(app, w, r)
+		httpPostRunInstallScript(app, w, r)
+	})
+	mux.HandleFunc("POST /target/{target}/startup", func(w http.ResponseWriter, r *http.Request) {
+		httpPostRunStartupScript(app, w, r)
 	})
 	mux.HandleFunc("POST /target/{target}/panic/", func(w http.ResponseWriter, r *http.Request) {
 		httpPostPanic(app, w, r)
@@ -559,6 +674,8 @@ func main() {
 	if err := server.Shutdown(ctx); err != nil {
 		log.Printf("Server shutdown error: %s", err)
 	}
+
+	targetsSave(app)
 
 	log.Println("Server shut down properly")
 }
