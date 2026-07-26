@@ -202,16 +202,9 @@ func copyFolder(client *sftp.Client, src, dst string) error {
 	})
 }
 
-func copyProject(app Application) error {
+func copyProject(target DeploymentTargetInfo) error {
 	fmt.Println("Starting copy")
 	pathToDcomms := os.Getenv("DCOMMS_GIT_REPO_PATH")
-	// cmd := exec.Command("scp", "-r", "-v", "-P", app.conn.Port, pathToDcomms + "/.", app.conn.User+"@"+app.conn.Host+":~/dcomms/setup")
-	// output, err := cmd.CombinedOutput()
-
-	// if err != nil {
-	// 	log.Printf("Error running shell: %v\n%s\n", err, output)
-	// 	return err
-	// }
 
 	socket := os.Getenv("SSH_AUTH_SOCK")
 
@@ -224,14 +217,14 @@ func copyProject(app Application) error {
 	agentClient := agent.NewClient(conn)
 
 	config := &ssh.ClientConfig{
-		User: app.conn.User,
+		User: target.User,
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeysCallback(agentClient.Signers),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
-	client, err := ssh.Dial("tcp", app.conn.Host+":"+app.conn.Port, config)
+	client, err := ssh.Dial("tcp", target.Host+":"+target.Port, config)
 
 	if err != nil {
 		return err
@@ -244,7 +237,7 @@ func copyProject(app Application) error {
 	}
 	defer sftpClient.Close()
 
-	if err := copyFolder(sftpClient, pathToDcomms, "/home/"+app.conn.User+"/dcomms/setup"); err != nil {
+	if err := copyFolder(sftpClient, pathToDcomms, "/home/"+target.User+"/dcomms/setup"); err != nil {
 		return fmt.Errorf("Fail to copy files: %s", err)
 	}
 
@@ -298,7 +291,7 @@ func sshExecCommand(c DeploymentTargetInfo, cmd string) error {
 	return nil
 }
 
-func remoteOsStatus(app Application) []byte {
+func remoteOsStatus(target DeploymentTargetInfo) []byte {
 	var buf bytes.Buffer
 
 	commands := []string{
@@ -309,7 +302,7 @@ func remoteOsStatus(app Application) []byte {
 	}
 
 	for _, cmd := range commands {
-		if err := sshExecCommand(app.conn, cmd); err != nil {
+		if err := sshExecCommand(target, cmd); err != nil {
 			return nil
 		}
 	}
@@ -317,39 +310,39 @@ func remoteOsStatus(app Application) []byte {
 	return buf.Bytes()
 }
 
-func remoteServiceDown(app Application, serviceID string) error {
+func remoteServiceDown(app Application, target DeploymentTargetInfo, serviceID string) error {
 	serviceCfg, found := app.systemCfg.Services[serviceID]
 
 	if !found {
 		return fmt.Errorf("Service is not registered %s", serviceID)
 	}
 
-	cmd := fmt.Sprintf("podman-compose -f %s down", path.Join("/home", app.conn.User, "dcomms", "setup", "conf", "compose", serviceCfg.ComposePath))
+	cmd := fmt.Sprintf("podman-compose -f %s down", path.Join("/home", target.User, "dcomms", "setup", "conf", "compose", serviceCfg.ComposePath))
 
-	if err := sshExecCommand(app.conn, cmd); err != nil {
+	if err := sshExecCommand(target, cmd); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func remoteServiceUp(app Application, serviceID string) error {
+func remoteServiceUp(app Application, target DeploymentTargetInfo, serviceID string) error {
 	serviceCfg, found := app.systemCfg.Services[serviceID]
 
 	if !found {
 		return fmt.Errorf("Service is not registered %s", serviceID)
 	}
 
-	cmd := fmt.Sprintf("podman-compose -d -f %s up", path.Join("/home", app.conn.User, "dcomms", "setup", "conf", "compose", serviceCfg.ComposePath))
+	cmd := fmt.Sprintf("podman-compose -d -f %s up", path.Join("/home", target.User, "dcomms", "setup", "conf", "compose", serviceCfg.ComposePath))
 
-	if err := sshExecCommand(app.conn, cmd); err != nil {
+	if err := sshExecCommand(target, cmd); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func getEnv(app Application, serviceID string) ([]byte, error) {
+func getEnv(app Application, target DeploymentTargetInfo, serviceID string) ([]byte, error) {
 	serviceCfg, found := app.systemCfg.Services[serviceID]
 
 	if !found {
@@ -358,7 +351,7 @@ func getEnv(app Application, serviceID string) ([]byte, error) {
 	var stdoutBuf bytes.Buffer
 	var out bytes.Buffer
 
-	err := sshExecCommand(app.conn, fmt.Sprintf("podman-compose -f config %s --services", serviceCfg.ComposePath))
+	err := sshExecCommand(target, fmt.Sprintf("podman-compose -f config %s --services", serviceCfg.ComposePath))
 
 	if err != nil {
 		return nil, err
@@ -373,9 +366,9 @@ func getEnv(app Application, serviceID string) ([]byte, error) {
 			continue
 		}
 		// TODO: write this to `out`
-		cmd := fmt.Sprintf("podman-compose -d -f %s exec %s", path.Join("/home", app.conn.User, "dcomms", "setup", "conf", "compose", serviceCfg.ComposePath), "env")
+		cmd := fmt.Sprintf("podman-compose -d -f %s exec %s", path.Join("/home", target.User, "dcomms", "setup", "conf", "compose", serviceCfg.ComposePath), "env")
 
-		if err := sshExecCommand(app.conn, cmd); err != nil {
+		if err := sshExecCommand(target, cmd); err != nil {
 			return nil, err
 		}
 
@@ -388,27 +381,90 @@ func getEnv(app Application, serviceID string) ([]byte, error) {
 }
 
 func httpGetInfo(app Application, w http.ResponseWriter, r *http.Request) {
-	w.Write(remoteOsStatus(app))
+	target, err := strconv.Atoi(r.PathValue("target"))
+
+	if err != nil {
+		fmt.Println("Failed to parse target id:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	t, found := app.targets[target]
+
+	if !found {
+		fmt.Println("Target not found: ", target)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Write(remoteOsStatus(t))
 }
 
 func httpPostServiceStart(app Application, w http.ResponseWriter, r *http.Request) {
 	serviceID := r.PathValue("id")
-	remoteServiceUp(app, serviceID)
+	target, err := strconv.Atoi(r.PathValue("target"))
+
+	if err != nil {
+		fmt.Println("Failed to parse target id:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	t, found := app.targets[target]
+
+	if !found {
+		fmt.Println("Target not found: ", target)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	remoteServiceUp(app, t, serviceID)
 }
 
 func httpPostServiceStop(app Application, w http.ResponseWriter, r *http.Request) {
 	serviceID := r.PathValue("id")
-	remoteServiceDown(app, serviceID)
+	target, err := strconv.Atoi(r.PathValue("target"))
+
+	if err != nil {
+		fmt.Println("Failed to parse target id:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	t, found := app.targets[target]
+
+	if !found {
+		fmt.Println("Target not found: ", target)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	remoteServiceDown(app, t, serviceID)
 }
 
 func httpPostPanic(app Application, w http.ResponseWriter, r *http.Request) {
-	serviceStopAll(app)
+	target, err := strconv.Atoi(r.PathValue("target"))
+
+	if err != nil {
+		fmt.Println("Failed to parse target id:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	t, found := app.targets[target]
+
+	if !found {
+		fmt.Println("Target not found: ", target)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	serviceStopAll(app, t)
 	// TODO: remove all volumes
 }
 
-func serviceStopAll(app Application) {
+func serviceStopAll(app Application, target DeploymentTargetInfo) {
+
 	for serviceID := range app.systemCfg.Services {
-		if err := remoteServiceDown(app, serviceID); err != nil {
+		if err := remoteServiceDown(app, target, serviceID); err != nil {
 			log.Printf("Failed to bring compose down: %s", err)
 		}
 	}
@@ -444,25 +500,32 @@ func httpPostTargetCreate(app Application, w http.ResponseWriter, r *http.Reques
 }
 
 func httpPostRunStartupScript(app Application, w http.ResponseWriter, r *http.Request) {
-	// depTargetID := r.PathValue("target")
-	// we are gonna set this up in /target/create
-	app.conn = DeploymentTargetInfo{
-		Host:   r.FormValue("host"),
-		User:   r.FormValue("username"),
-		Port:   r.FormValue("port"),
-		Domain: r.FormValue("domainname"),
+	target, err := strconv.Atoi(r.PathValue("target"))
+
+	if err != nil {
+		fmt.Println("Failed to parse target id:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
-	if err := copyProject(app); err != nil {
+	t, found := app.targets[target]
+
+	if !found {
+		fmt.Println("Target not found: ", target)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if err := copyProject(t); err != nil {
 		fmt.Println("Failed to copy project files:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	pathToDComms := "/home/" + app.conn.User + "/dcomms/setup"
+	pathToDComms := "/home/" + t.User + "/dcomms/setup"
 	pathToDCommsRun := pathToDComms + "/run.sh"
 
-	err := sshExecCommand(app.conn, `cd `+pathToDComms+` && chmod +x `+pathToDCommsRun+` && PATH=$PATH:~/.local/bin `+pathToDCommsRun)
+	err = sshExecCommand(t, `cd `+pathToDComms+` && chmod +x `+pathToDCommsRun+` && PATH=$PATH:~/.local/bin `+pathToDCommsRun)
 	if err != nil {
 		fmt.Println("Failed to exec install script:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -472,16 +535,24 @@ func httpPostRunStartupScript(app Application, w http.ResponseWriter, r *http.Re
 }
 
 func httpPostRunInstallScript(app Application, w http.ResponseWriter, r *http.Request) {
-	// depTargetID := r.PathValue("target")
-	// we are gonna set this up in /target/create
-	app.conn = DeploymentTargetInfo{
-		Host:   r.FormValue("host"),
-		User:   r.FormValue("username"),
-		Port:   r.FormValue("port"),
-		Domain: r.FormValue("domainname"),
+	target, err := strconv.Atoi(r.PathValue("target"))
+
+	if err != nil {
+		fmt.Println("Failed to parse target id:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
-	cmd := exec.Command("ssh", app.conn.User+"@"+app.conn.Host, "bash -s")
+	t, found := app.targets[target]
+
+	if !found {
+		fmt.Println("Target not found: ", target)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+
+	cmd := exec.Command("ssh", t.User+"@"+t.Host, "bash -s")
 	stdin, err := cmd.StdinPipe()
 
 	if err != nil {
@@ -500,7 +571,7 @@ func httpPostRunInstallScript(app Application, w http.ResponseWriter, r *http.Re
 	fmt.Println("--- Running pre-req install script ---")
 	fmt.Println(string(output))
 	if err != nil {
-		fmt.Println(app.conn.Host, app.conn.User, app.conn.Port)
+		fmt.Println(t.Host, t.User, t.Port)
 		fmt.Println("Error running ssh to a VPS", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -508,17 +579,17 @@ func httpPostRunInstallScript(app Application, w http.ResponseWriter, r *http.Re
 
 	fmt.Println("--- End of pre-req install script  ---")
 
-	if err := copyProject(app); err != nil {
+	if err := copyProject(t); err != nil {
 		fmt.Println("Failed to copy project files:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	pathToDComms := "/home/" + app.conn.User + "/dcomms/setup"
+	pathToDComms := "/home/" + t.User + "/dcomms/setup"
 	pathToDCommsInstall := pathToDComms + "/install_podman.sh"
 
 	// FIXME: temporary PATH setting
-	err = sshExecCommand(app.conn, `cd `+pathToDComms+` && chmod +x `+pathToDCommsInstall+` && PATH=$PATH:~/.local/bin DWEB_DOMAIN=`+app.conn.Domain+` CHOICES="1" `+pathToDCommsInstall)
+	err = sshExecCommand(t, `cd `+pathToDComms+` && chmod +x `+pathToDCommsInstall+` && PATH=$PATH:~/.local/bin DWEB_DOMAIN=`+t.Domain+` CHOICES="1" `+pathToDCommsInstall)
 	if err != nil {
 		fmt.Println("Failed to exec install script:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -530,7 +601,23 @@ func httpPostRunInstallScript(app Application, w http.ResponseWriter, r *http.Re
 func httpGetEnv(app Application, w http.ResponseWriter, r *http.Request) {
 	serviceID := r.PathValue("id")
 
-	env, err := getEnv(app, serviceID)
+	target, err := strconv.Atoi(r.PathValue("target"))
+
+	if err != nil {
+		fmt.Println("Failed to parse target id:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	t, found := app.targets[target]
+
+	if !found {
+		fmt.Println("Target not found: ", target)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	env, err := getEnv(app, t, serviceID)
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -611,7 +698,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.Handle("GET /", fileServer)
-	mux.HandleFunc("GET /info", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /target/{target}/info", func(w http.ResponseWriter, r *http.Request) {
 		httpGetInfo(app, w, r)
 	})
 	mux.HandleFunc("POST /target/create", func(w http.ResponseWriter, r *http.Request) {
