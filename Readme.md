@@ -29,6 +29,15 @@ The dcomms-docker-compose project is included not as a git submodule because of 
 
 Due to a bug podman-compose is currently not found when running via ssh.
 
+# API
+
+The basic structure of entities looks like this:
+    * Target (Deployment target) - VPS or Cloud service
+     * Service - Docker/Podman compose service
+      * Actual containers
+
+So first of all we create a target, run install script there, then run the first run services
+
 # TODO
 
 * debug install_podman.sh (right now only CENO, parts of Peertube and Mastodon are succesfully installed, Matrix setup hangs when running podman-compose up) 
