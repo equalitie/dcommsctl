@@ -49,7 +49,7 @@ POST /target/{target_id}/stop - stop services
 Right now there is no properly working web UI so it's enough to just use curl:
 
 ```
-curl -d 'host=127.127.127.127&username=dcomms&port=22&domainname=domainname.org&backend=docker' localhost:8080/target/create
+curl -d 'host=127.127.127.127&username=dcomms&port=22&domainname=domainname.org&backend=docker&matrix_on=on' localhost:8080/target/create
 ```
 
 Service choice is also hard-coded in main.go where the `install.sh` is called via CHOICES environment variable. Details are in the install.sh script.

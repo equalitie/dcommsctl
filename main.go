@@ -17,6 +17,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -85,6 +86,11 @@ type DeploymentTargetInfo struct {
 	// folder where we store the dcomms repo
 	ProjectRoot      string
 	ContainerBackend ContainerBackendType
+	MastodonEnabled  bool
+	MatrixEnabled    bool
+	CenoEnabled      bool
+	PeertubeEnabled  bool
+	MauEnabled       bool
 }
 
 type Application struct {
@@ -124,14 +130,36 @@ func targetsSave(app Application) error {
 
 	defer f.Close()
 	w := csv.NewWriter(f)
-	for id, target := range app.targets {
+	for id, t := range app.targets {
 
 		backend := "docker"
 
-		if target.ContainerBackend == ContainerBackendPodman {
+		if t.ContainerBackend == ContainerBackendPodman {
 			backend = "podman"
 		}
-		if err := w.Write([]string{strconv.Itoa(id), backend, target.Host, target.Port, target.User, target.Domain}); err != nil {
+
+		services := []string{}
+		if t.MatrixEnabled {
+			services = append(services, "matrix")
+		}
+		if t.CenoEnabled {
+			services = append(services, "ceno")
+		}
+		if t.MauEnabled {
+			services = append(services, "mau")
+		}
+		if t.MastodonEnabled {
+			services = append(services, "mastodon")
+		}
+		if t.PeertubeEnabled {
+			services = append(services, "peertube")
+		}
+
+		if len(services) == 0 {
+			continue
+		}
+
+		if err := w.Write([]string{strconv.Itoa(id), backend, t.Host, t.Port, t.User, t.Domain, strings.Join(services, "+")}); err != nil {
 			fmt.Println(err)
 		}
 	}
@@ -157,7 +185,8 @@ func targetsLoad(app Application) error {
 		id, err := strconv.Atoi(rec[0])
 
 		if err != nil {
-			return err
+			fmt.Println("Error while parsing error in targets.csv", err)
+			continue
 		}
 
 		backend := rec[1]
@@ -165,14 +194,21 @@ func targetsLoad(app Application) error {
 		port := rec[3]
 		user := rec[4]
 		domain := rec[5]
+		services := rec[6]
 
+		srvsSplit := strings.Split(services, "+")
+
+		if len(srvsSplit) == 0 {
+			fmt.Printf("No services specified for a target %d, ignoring\n", id)
+			continue
+		}
 		containerBackend := ContainerBackendType(ContainerBackendDocker)
 
 		if backend == "podman" {
 			containerBackend = ContainerBackendPodman
 		}
 
-		app.targets[id] = DeploymentTargetInfo{
+		t := DeploymentTargetInfo{
 			Host:             host,
 			Port:             port,
 			User:             user,
@@ -180,6 +216,25 @@ func targetsLoad(app Application) error {
 			ContainerBackend: containerBackend,
 		}
 
+		for _, srv := range srvsSplit {
+			if srv == "matrix" {
+				t.MatrixEnabled = true
+			}
+			if srv == "ceno" {
+				t.CenoEnabled = true
+			}
+			if srv == "mau" {
+				t.MauEnabled = true
+			}
+			if srv == "mastodon" {
+				t.MastodonEnabled = true
+			}
+			if srv == "peertube" {
+				t.PeertubeEnabled = true
+			}
+		}
+
+		app.targets[id] = t
 	}
 	return nil
 }
@@ -506,7 +561,7 @@ func httpPostTargetCreate(app Application, w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	backend := r.FormValue("domainname")
+	backend := r.FormValue("backend")
 	containerBackend := ContainerBackendType(ContainerBackendDocker)
 
 	if backend == "podman" {
@@ -514,13 +569,24 @@ func httpPostTargetCreate(app Application, w http.ResponseWriter, r *http.Reques
 	}
 
 	// FIXME: properly process form values
-	app.targets[maxId+1] = DeploymentTargetInfo{
-		Host:   r.FormValue("host"),
-		User:   r.FormValue("username"),
-		Port:   r.FormValue("port"),
-		Domain: r.FormValue("domainname"),
+	t := DeploymentTargetInfo{
+		Host:             r.FormValue("host"),
+		User:             r.FormValue("username"),
+		Port:             r.FormValue("port"),
+		Domain:           r.FormValue("domainname"),
+		MatrixEnabled:    r.FormValue("matrix_on") == "on",
+		MauEnabled:       r.FormValue("mau_on") == "on",
+		CenoEnabled:      r.FormValue("ceno_on") == "on",
+		PeertubeEnabled:  r.FormValue("peertube_on") == "on",
+		MastodonEnabled:  r.FormValue("mastodon_on") == "on",
 		ContainerBackend: containerBackend,
 	}
+
+	if t.MauEnabled && !t.MatrixEnabled {
+		t.MauEnabled = false
+	}
+
+	app.targets[maxId+1] = t
 
 	targetsSave(app)
 
@@ -548,10 +614,15 @@ func httpPostTargetUpdate(app Application, w http.ResponseWriter, r *http.Reques
 
 	// FIXME: properly process form values
 	app.targets[target] = DeploymentTargetInfo{
-		Host:   r.FormValue("host"),
-		User:   r.FormValue("username"),
-		Port:   r.FormValue("port"),
-		Domain: r.FormValue("domainname"),
+		Host:            r.FormValue("host"),
+		User:            r.FormValue("username"),
+		Port:            r.FormValue("port"),
+		Domain:          r.FormValue("domainname"),
+		MatrixEnabled:   r.FormValue("matrix_on") == "on",
+		MauEnabled:      r.FormValue("mau_on") == "on",
+		CenoEnabled:     r.FormValue("ceno_on") == "on",
+		PeertubeEnabled: r.FormValue("peertube_on") == "on",
+		MastodonEnabled: r.FormValue("mastodon_on") == "on",
 	}
 
 	targetsSave(app)
@@ -624,7 +695,7 @@ func httpPostRunInstallScript(app Application, w http.ResponseWriter, r *http.Re
 
 	if err != nil {
 		fmt.Println("Failed to parse target id:", err)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -633,6 +704,30 @@ func httpPostRunInstallScript(app Application, w http.ResponseWriter, r *http.Re
 	if !found {
 		fmt.Println("Target not found: ", target)
 		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	choices := []string{}
+
+	if t.MatrixEnabled {
+		choices = append(choices, "1")
+	}
+	if t.CenoEnabled {
+		choices = append(choices, "2")
+	}
+	if t.MauEnabled {
+		choices = append(choices, "3")
+	}
+	if t.MastodonEnabled {
+		choices = append(choices, "4")
+	}
+	if t.PeertubeEnabled {
+		choices = append(choices, "5")
+	}
+
+	if len(choices) == 0 {
+		fmt.Println("Install ran without any services selected")
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -677,7 +772,7 @@ func httpPostRunInstallScript(app Application, w http.ResponseWriter, r *http.Re
 	}
 
 	// FIXME: temporary PATH setting
-	err = sshExecCommand(t, `cd `+pathToDComms+` && chmod +x `+pathToDCommsInstall+` && PATH=$PATH:~/.local/bin DWEB_DOMAIN=`+t.Domain+` CHOICES="1" `+pathToDCommsInstall)
+	err = sshExecCommand(t, fmt.Sprintf(`cd %s && chmod +x %s && PATH=$PATH:~/.local/bin DWEB_DOMAIN=%s CHOICES="%s" %s`, pathToDComms, pathToDCommsInstall, t.Domain, strings.Join(choices, " "), pathToDCommsInstall))
 	if err != nil {
 		fmt.Println("Failed to exec install script:", err)
 		w.WriteHeader(http.StatusInternalServerError)
