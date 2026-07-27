@@ -578,10 +578,42 @@ func httpPostRunStartupScript(app Application, w http.ResponseWriter, r *http.Re
 
 	pathToDComms := "/home/" + t.User + "/dcomms/setup"
 	pathToDCommsRun := pathToDComms + "/run.sh"
+	pathToDCommsStop := pathToDComms + "/stop.sh"
 
-	err = sshExecCommand(t, `cd `+pathToDComms+` && chmod +x `+pathToDCommsRun+` && PATH=$PATH:~/.local/bin `+pathToDCommsRun)
+	// FIXME: we probably should not run this, but we do for now
+	_ = sshExecCommand(t, `cd `+pathToDComms+` && PATH=$PATH:~/.local/bin `+pathToDCommsStop)
+
+	err = sshExecCommand(t, `cd `+pathToDComms+` && PATH=$PATH:~/.local/bin `+pathToDCommsRun)
 	if err != nil {
-		fmt.Println("Failed to exec install script:", err)
+		fmt.Println("Failed to exec run.sh script:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
+func httpPostRunStopScript(app Application, w http.ResponseWriter, r *http.Request) {
+	target, err := strconv.Atoi(r.PathValue("target"))
+
+	if err != nil {
+		fmt.Println("Failed to parse target id:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	t, found := app.targets[target]
+
+	if !found {
+		fmt.Println("Target not found: ", target)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	pathToDComms := "/home/" + t.User + "/dcomms/setup"
+	pathToDCommsStop := pathToDComms + "/stop.sh"
+
+	err = sshExecCommand(t, `cd `+pathToDComms+` && PATH=$PATH:~/.local/bin `+pathToDCommsStop)
+	if err != nil {
+		fmt.Println("Failed to exec stop.sh script:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -775,8 +807,11 @@ func main() {
 	mux.HandleFunc("POST /target/{target}/install", func(w http.ResponseWriter, r *http.Request) {
 		httpPostRunInstallScript(app, w, r)
 	})
-	mux.HandleFunc("POST /target/{target}/startup", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /target/{target}/start", func(w http.ResponseWriter, r *http.Request) {
 		httpPostRunStartupScript(app, w, r)
+	})
+	mux.HandleFunc("POST /target/{target}/stop", func(w http.ResponseWriter, r *http.Request) {
+		httpPostRunStopScript(app, w, r)
 	})
 	mux.HandleFunc("POST /target/{target}/panic/", func(w http.ResponseWriter, r *http.Request) {
 		httpPostPanic(app, w, r)

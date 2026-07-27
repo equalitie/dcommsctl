@@ -333,8 +333,10 @@ main() {
         peertube_config
     fi
     echo "sudo DWEB_ONION=$DWEB_ONION DWEB_DOMAIN=$DWEB_DOMAIN DWEB_FRIENDLY_DOMAIN=$DWEB_FRIENDLY_DOMAIN docker compose $COMPOSE_FILES up -d" >> $DCOMMS_DIR/run.sh
-    chmod +x $DCOMMS_DIR/run.sh
-    printf "${GREEN} dComms succesfully installed! Start your services by running 'run.sh' in $DCOMMS_DIR.${NC}\n"
+    cp $DCOMMS_DIR/{run,stop}.sh
+    sed -i -e 's/up -d/down/g' $DCOMMS_DIR/stop.sh
+    chmod +x $DCOMMS_DIR/run.sh $DCOMMS_DIR/stop.sh
+    printf "${GREEN} dComms succesfully installed! Start your services by running 'run.sh' or stop by running 'stop.sh' in $DCOMMS_DIR.${NC}\n"
 }
 
 main
