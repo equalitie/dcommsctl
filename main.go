@@ -16,9 +16,9 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
-	"strconv"
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -69,6 +69,13 @@ type ServiceConfig struct {
 	ContainerID string
 }
 
+type ContainerBackendType int
+
+const (
+	ContainerBackendDocker = iota
+	ContainerBackendPodman
+)
+
 // This is a deployment target info, either cloud or VPS, for now only VPS
 type DeploymentTargetInfo struct {
 	User   string
@@ -76,7 +83,8 @@ type DeploymentTargetInfo struct {
 	Port   string
 	Domain string
 	// folder where we store the dcomms repo
-	ProjectRoot string
+	ProjectRoot      string
+	ContainerBackend ContainerBackendType
 }
 
 type Application struct {
@@ -117,7 +125,13 @@ func targetsSave(app Application) error {
 	defer f.Close()
 	w := csv.NewWriter(f)
 	for id, target := range app.targets {
-		if err := w.Write([]string{strconv.Itoa(id), target.Host, target.Port, target.User, target.Domain}); err != nil {
+
+		backend := "docker"
+
+		if target.ContainerBackend == ContainerBackendPodman {
+			backend = "podman"
+		}
+		if err := w.Write([]string{strconv.Itoa(id), backend, target.Host, target.Port, target.User, target.Domain}); err != nil {
 			fmt.Println(err)
 		}
 	}
@@ -147,15 +161,23 @@ func targetsLoad(app Application) error {
 		}
 
 		host := rec[1]
-		port := rec[2]
-		user := rec[3]
-		domain := rec[4]
+		backend := rec[2]
+		port := rec[3]
+		user := rec[4]
+		domain := rec[5]
+
+		containerBackend := ContainerBackendType(ContainerBackendDocker)
+
+		if backend == "podman" {
+			containerBackend = ContainerBackendPodman
+		}
 
 		app.targets[id] = DeploymentTargetInfo{
-			Host: host,
-			Port: port,
-			User: user,
-			Domain: domain,
+			Host:             host,
+			Port:             port,
+			User:             user,
+			Domain:           domain,
+			ContainerBackend: containerBackend,
 		}
 
 	}
@@ -471,7 +493,7 @@ func serviceStopAll(app Application, target DeploymentTargetInfo) {
 }
 
 func postTestInstallation(app Application, w http.ResponseWriter, r *http.Request) {
-
+	// TODO: implement a check script to see if we're ready to install Dcomms on deployment target
 }
 
 func httpPostTargetCreate(app Application, w http.ResponseWriter, r *http.Request) {
@@ -484,8 +506,48 @@ func httpPostTargetCreate(app Application, w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	backend := r.FormValue("domainname")
+	containerBackend := ContainerBackendType(ContainerBackendDocker)
+
+	if backend == "podman" {
+		containerBackend = ContainerBackendPodman
+	}
+
 	// FIXME: properly process form values
 	app.targets[maxId+1] = DeploymentTargetInfo{
+		Host:   r.FormValue("host"),
+		User:   r.FormValue("username"),
+		Port:   r.FormValue("port"),
+		Domain: r.FormValue("domainname"),
+		ContainerBackend: containerBackend,
+	}
+
+	targetsSave(app)
+
+	fmt.Println("Target created. ID:", maxId+1)
+
+	// TODO: return JSON representation of the target from which client can construct
+}
+
+func httpPostTargetUpdate(app Application, w http.ResponseWriter, r *http.Request) {
+	target, err := strconv.Atoi(r.PathValue("target"))
+
+	if err != nil {
+		fmt.Println("Failed to parse target id:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	_, found := app.targets[target]
+
+	if !found {
+		fmt.Println("Target not found: ", target)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// FIXME: properly process form values
+	app.targets[target] = DeploymentTargetInfo{
 		Host:   r.FormValue("host"),
 		User:   r.FormValue("username"),
 		Port:   r.FormValue("port"),
@@ -494,9 +556,7 @@ func httpPostTargetCreate(app Application, w http.ResponseWriter, r *http.Reques
 
 	targetsSave(app)
 
-	fmt.Println("Target created. ID:", maxId + 1)
-
-	// TODO: return JSON representation of the target from which client can construct
+	fmt.Println("Target updated. ID:", target)
 }
 
 func httpPostRunStartupScript(app Application, w http.ResponseWriter, r *http.Request) {
@@ -516,12 +576,6 @@ func httpPostRunStartupScript(app Application, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if err := copyProject(t); err != nil {
-		fmt.Println("Failed to copy project files:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
 	pathToDComms := "/home/" + t.User + "/dcomms/setup"
 	pathToDCommsRun := pathToDComms + "/run.sh"
 
@@ -531,7 +585,6 @@ func httpPostRunStartupScript(app Application, w http.ResponseWriter, r *http.Re
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	// w.Write(output)
 }
 
 func httpPostRunInstallScript(app Application, w http.ResponseWriter, r *http.Request) {
@@ -550,7 +603,6 @@ func httpPostRunInstallScript(app Application, w http.ResponseWriter, r *http.Re
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
 
 	cmd := exec.Command("ssh", t.User+"@"+t.Host, "bash -s")
 	stdin, err := cmd.StdinPipe()
@@ -586,7 +638,11 @@ func httpPostRunInstallScript(app Application, w http.ResponseWriter, r *http.Re
 	}
 
 	pathToDComms := "/home/" + t.User + "/dcomms/setup"
-	pathToDCommsInstall := pathToDComms + "/install_podman.sh"
+	pathToDCommsInstall := pathToDComms + "/install.sh"
+
+	if t.ContainerBackend == ContainerBackendPodman {
+		pathToDCommsInstall = pathToDComms + "/install_podman.sh"
+	}
 
 	// FIXME: temporary PATH setting
 	err = sshExecCommand(t, `cd `+pathToDComms+` && chmod +x `+pathToDCommsInstall+` && PATH=$PATH:~/.local/bin DWEB_DOMAIN=`+t.Domain+` CHOICES="1" `+pathToDCommsInstall)
@@ -595,7 +651,6 @@ func httpPostRunInstallScript(app Application, w http.ResponseWriter, r *http.Re
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	// w.Write(output)
 }
 
 func httpGetEnv(app Application, w http.ResponseWriter, r *http.Request) {
@@ -702,8 +757,10 @@ func main() {
 		httpGetInfo(app, w, r)
 	})
 	mux.HandleFunc("POST /target/create", func(w http.ResponseWriter, r *http.Request) {
-		// FIXME: call for target creation
 		httpPostTargetCreate(app, w, r)
+	})
+	mux.HandleFunc("POST /target/{target}/update", func(w http.ResponseWriter, r *http.Request) {
+		httpPostTargetUpdate(app, w, r)
 	})
 	mux.HandleFunc("GET /target/{target}/env/{id}", func(w http.ResponseWriter, r *http.Request) {
 		httpGetEnv(app, w, r)
