@@ -43,7 +43,7 @@ POST /target/create - create target with POST form data
 POST /target/{target_id}/update - update target with POST form data
 POST /target/{target_id}/install - install pre-requisites
 POST /target/{target_id}/start - run services
-POST /target/{target_id}/stop - run services
+POST /target/{target_id}/stop - stop services
 ```
 
 Right now there is no properly working web UI so it's enough to just use curl:
