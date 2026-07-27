@@ -160,8 +160,8 @@ func targetsLoad(app Application) error {
 			return err
 		}
 
-		host := rec[1]
-		backend := rec[2]
+		backend := rec[1]
+		host := rec[2]
 		port := rec[3]
 		user := rec[4]
 		domain := rec[5]
