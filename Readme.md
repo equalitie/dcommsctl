@@ -57,6 +57,6 @@ Service choice is also hard-coded in main.go where the `install.sh` is called vi
 
 * debug install_podman.sh (right now only CENO, parts of Peertube and Mastodon are succesfully installed, Matrix setup hangs when running podman-compose up) 
 * implement choice of services you want to install
-* make it possible to create new deployment targets and check for the status of running services
+* make it possible to check for the status of running services
 * actually handle running and stopping of podman services
 * fetch status of all services
