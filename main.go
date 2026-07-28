@@ -434,11 +434,9 @@ func sshTunnel(t DeploymentTargetInfo, localAddr string) error {
 		if strings.HasPrefix(ctr.Image, "matrixdotorg/synapse:") {
 			createResp, err := containerClient.ExecCreate(ctx, ctr.ID, client.ExecCreateOptions{
 				Cmd: []string{
-					// TODO: debug this
-					// "register_new_matrix_user -u dcomms-admin --admin -c /data/homeserver.yaml",
-					// NOTE: this one fails, so the problem is again with /data/homeserver.yaml not being bound
-					// "ls /data",
-					"ls",
+					"sh", "-c",
+					// FIXME: gen password and feed it from stdin
+					"register_new_matrix_user -u dcomms-admin -p test --admin -c /data/homeserver.yaml",
 				},
 				AttachStdout: true,
 				AttachStderr: true,
