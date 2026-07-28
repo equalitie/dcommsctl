@@ -434,8 +434,10 @@ func sshTunnel(t DeploymentTargetInfo, localAddr string) error {
 		if strings.HasPrefix(ctr.Image, "matrixdotorg/synapse:") {
 			createResp, err := containerClient.ExecCreate(ctx, ctr.ID, client.ExecCreateOptions{
 				Cmd: []string{
-					// TODO: debug this, seems like /data/homeserver.yaml is lost again
+					// TODO: debug this
 					// "register_new_matrix_user -u dcomms-admin --admin -c /data/homeserver.yaml",
+					// NOTE: this one fails, so the problem is again with /data/homeserver.yaml not being bound
+					// "ls /data",
 					"ls",
 				},
 				AttachStdout: true,
@@ -458,14 +460,9 @@ func sshTunnel(t DeploymentTargetInfo, localAddr string) error {
 				log.Fatalf("Failed to read output: %v", err)
 			}
 
-			fmt.Println("Command output:")
+			fmt.Println("--- Running command on container ---")
 			fmt.Println(stdoutBuf.String())
-
-			_, err = containerClient.ExecStart(ctx, createResp.ID, client.ExecStartOptions{})
-
-			if err != nil {
-				fmt.Println("Failed to start exec command:", err)
-			}
+			fmt.Println("---     End of command output    ---")
 
 		}
 		fmt.Printf("%s  %-22s  %s\n", ctr.ID, ctr.Status, ctr.Image)
