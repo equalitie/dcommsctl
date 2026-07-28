@@ -25,7 +25,7 @@ import (
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
-
+    "github.com/moby/moby/client"
 	"go.podman.io/podman/v6/pkg/bindings"
 	// "go.podman.io/podman/v6/pkg/bindings/images"
 	// "go.podman.io/podman/v6/pkg/specgen"
@@ -92,6 +92,8 @@ type DeploymentTargetInfo struct {
 	CenoEnabled      bool
 	PeertubeEnabled  bool
 	MauEnabled       bool
+
+	SSHTunnelEstablished bool
 }
 
 type Application struct {
@@ -320,6 +322,115 @@ func copyProject(target DeploymentTargetInfo) error {
 	}
 
 	fmt.Println("Ending copy")
+	return nil
+}
+
+func sshDockerSend(t DeploymentTargetInfo, localAddr string) error {
+
+	if !t.SSHTunnelEstablished {
+		sshTunnel(t, localAddr)
+	}
+
+
+	return nil
+}
+
+func sshTunnel(t DeploymentTargetInfo, localAddr string) error {
+	socket := os.Getenv("SSH_AUTH_SOCK")
+
+	conn, err := net.Dial("unix", socket)
+
+	if err != nil {
+		return fmt.Errorf("Unable to connect to ssh-agent socket: %s", err)
+	}
+
+	agentClient := agent.NewClient(conn)
+
+	config := &ssh.ClientConfig{
+		User: t.User,
+		Auth: []ssh.AuthMethod{
+			ssh.PublicKeysCallback(agentClient.Signers),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+
+	remoteSSHClient, err := ssh.Dial("tcp", t.Host+":"+t.Port, config)
+
+	if err != nil {
+		return fmt.Errorf("Unable to dial ssh: %v", err)
+	}
+	defer remoteSSHClient.Close()
+
+	listener, err := net.Listen("tcp", localAddr)
+
+	if err != nil {
+		return fmt.Errorf("Failed to listen on local address: %s", err)
+	}
+
+	go func() {
+		for {
+			localConn, err := listener.Accept()
+
+			if err != nil {
+				log.Printf("Failed to accept local connection: %s", err)
+				continue
+			}
+
+			remoteConn, err := remoteSSHClient.Dial("unix", "/var/run/docker.sock")
+
+			if err != nil {
+				log.Printf("Failed to dial remote Docker socket: %s", err)
+				localConn.Close()
+				continue
+			}
+
+			go func() {
+				defer localConn.Close()
+				defer remoteConn.Close()
+				io.Copy(localConn, remoteConn)
+			}()
+
+			go func() {
+				defer localConn.Close()
+				defer remoteConn.Close()
+				io.Copy(remoteConn, localConn)
+			}()
+		}
+	}()
+
+	containerClient, err := client.NewClientWithOpts(
+		client.FromEnv,
+		client.WithHost("tcp://" + localAddr),
+		client.WithAPIVersionNegotiation(),
+	)
+
+	if err != nil {
+		return fmt.Errorf("Failed to create docker client: %s", err)
+	}
+	defer containerClient.Close()
+
+	ctx := context.Background()
+
+	pingResult, err := containerClient.Ping(ctx, client.PingOptions{})
+
+	if err != nil {
+		return fmt.Errorf("Failed to ping docker client: %s", err)
+	}
+
+	fmt.Println("Docker API version", pingResult.APIVersion)
+
+	result, err := containerClient.ContainerList(context.Background(), client.ContainerListOptions{
+		All: true,
+	})
+	if err != nil {
+		return fmt.Errorf("Failed to list all docker containers: %s", err)
+	}
+
+	fmt.Printf("%s  %-22s  %s\n", "ID", "STATUS", "IMAGE")
+	for _, ctr := range result.Items {
+		fmt.Printf("%s  %-22s  %s\n", ctr.ID, ctr.Status, ctr.Image)
+	}
+
 	return nil
 }
 
@@ -681,6 +792,33 @@ func httpPostRunStartupScript(app Application, w http.ResponseWriter, r *http.Re
 	}
 }
 
+func httpPostRunCheckScript(app Application, w http.ResponseWriter, r *http.Request) {
+	target, err := strconv.Atoi(r.PathValue("target"))
+
+	if err != nil {
+		fmt.Println("Failed to parse target id:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	t, found := app.targets[target]
+
+	if !found {
+		fmt.Println("Target not found: ", target)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if err := sshDockerSend(t, "localhost:3000"); err != nil {
+		fmt.Println("Failed to tunnel to docker", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Tunnel failed: %s", err)
+		return
+	}
+
+	app.targets[target] = t
+}
+
 func httpPostRunStopScript(app Application, w http.ResponseWriter, r *http.Request) {
 	target, err := strconv.Atoi(r.PathValue("target"))
 
@@ -926,6 +1064,9 @@ func main() {
 	})
 	mux.HandleFunc("POST /target/{target}/stop", func(w http.ResponseWriter, r *http.Request) {
 		httpPostRunStopScript(app, w, r)
+	})
+	mux.HandleFunc("POST /target/{target}/check", func(w http.ResponseWriter, r *http.Request) {
+		httpPostRunCheckScript(app, w, r)
 	})
 	mux.HandleFunc("POST /target/{target}/panic/", func(w http.ResponseWriter, r *http.Request) {
 		httpPostPanic(app, w, r)
