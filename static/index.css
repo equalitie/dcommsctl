@@ -35,13 +35,8 @@ button {
     padding: 1rem 1rem;
     border: none;
     outline: none;
-    background: transparent;
     line-height: 130%;
     cursor: pointer;
-}
-
-button:hover {
-    background-image: linear-gradient(to top right, var(--color-bright-blue) 20%, var(--color-bright-purple) 90%);
 }
 
 .service {
