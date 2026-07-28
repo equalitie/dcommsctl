@@ -22,11 +22,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/moby/moby/client"
 	"github.com/pkg/sftp"
+	"go.podman.io/podman/v6/pkg/bindings"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
-    "github.com/moby/moby/client"
-	"go.podman.io/podman/v6/pkg/bindings"
 	// "go.podman.io/podman/v6/pkg/bindings/images"
 	// "go.podman.io/podman/v6/pkg/specgen"
 	// "github.com/gorilla/websocket"
@@ -334,7 +334,6 @@ func sshDockerSend(t DeploymentTargetInfo, localAddr string) error {
 		sshTunnel(t, localAddr)
 	}
 
-
 	return nil
 }
 
@@ -403,7 +402,7 @@ func sshTunnel(t DeploymentTargetInfo, localAddr string) error {
 
 	containerClient, err := client.NewClientWithOpts(
 		client.FromEnv,
-		client.WithHost("tcp://" + localAddr),
+		client.WithHost("tcp://"+localAddr),
 		client.WithAPIVersionNegotiation(),
 	)
 
@@ -431,6 +430,44 @@ func sshTunnel(t DeploymentTargetInfo, localAddr string) error {
 
 	fmt.Printf("%s  %-22s  %s\n", "ID", "STATUS", "IMAGE")
 	for _, ctr := range result.Items {
+		// FIXME: just testing execution of commands, no idea for now how to call it directly on container
+		if strings.HasPrefix(ctr.Image, "matrixdotorg/synapse:") {
+			createResp, err := containerClient.ExecCreate(ctx, ctr.ID, client.ExecCreateOptions{
+				Cmd: []string{
+					// TODO: debug this, seems like /data/homeserver.yaml is lost again
+					// "register_new_matrix_user -u dcomms-admin --admin -c /data/homeserver.yaml",
+					"ls",
+				},
+				AttachStdout: true,
+				AttachStderr: true,
+			})
+
+			if err != nil {
+				fmt.Println("Failed to create exec command on container:", err)
+				continue
+			}
+
+			attachResp, err := containerClient.ExecAttach(ctx, createResp.ID, client.ExecAttachOptions{ })
+			if err != nil {
+				log.Fatalf("Failed to attach to exec: %v", err)
+			}
+			defer attachResp.Close() 
+			var stdoutBuf bytes.Buffer
+			_, err = io.Copy(&stdoutBuf, attachResp.Reader)
+			if err != nil {
+				log.Fatalf("Failed to read output: %v", err)
+			}
+
+			fmt.Println("Command output:")
+			fmt.Println(stdoutBuf.String())
+
+			_, err = containerClient.ExecStart(ctx, createResp.ID, client.ExecStartOptions{})
+
+			if err != nil {
+				fmt.Println("Failed to start exec command:", err)
+			}
+
+		}
 		fmt.Printf("%s  %-22s  %s\n", ctr.ID, ctr.Status, ctr.Image)
 	}
 
