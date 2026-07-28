@@ -39,6 +39,7 @@
         return fragment;
     }
 
+
     let deploymentTarget = document.querySelector(".deployment_targets_list");
     let targetsReq = await fetch(`/target/list`);
 
@@ -61,24 +62,52 @@
     }
 
 
-    let installVPSForms = document.querySelectorAll(".form-install-vps");
-    for (const f of installVPSForms) {
-        f.addEventListener("submit", async function(e) {
+    let checkBtns = document.querySelectorAll(".btn-target-check");
+    for (const b of checkBtns) {
+        b.addEventListener("click", async function(e) {
             e.preventDefault();
+
             let btn = e.target;
-
             btn.disabled = true;
-
-            let targetID = form.dataset.id;
-
-            let installProm = fetch(`/target/${targetID}/install`, { method: "POST", body: form });
-
+            const targetRoot = btn.closest(".target-info");
+            let targetID = targetRoot.dataset.id;
+            let installProm = fetch(`/target/${targetID}/check`, { method: "POST" });
             await installProm.then(r => {}).finally(r => { 
                 btn.disabled = false;
             });
         });
     }
 
+    let startBtns = document.querySelectorAll(".btn-target-start");
+    for (const b of startBtns) {
+        b.addEventListener("click", async function(e) {
+            e.preventDefault();
+
+            let btn = e.target;
+            btn.disabled = true;
+            const targetRoot = btn.closest(".target-info");
+            let targetID = targetRoot.dataset.id;
+            let installProm = fetch(`/target/${targetID}/start`, { method: "POST" });
+            await installProm.then(r => {}).finally(r => { 
+                btn.disabled = false;
+            });
+        });
+    }
+    let stopBtns = document.querySelectorAll(".btn-target-stop");
+    for (const b of stopBtns) {
+        b.addEventListener("click", async function(e) {
+            e.preventDefault();
+
+            let btn = e.target;
+            btn.disabled = true;
+            const targetRoot = btn.closest(".target-info");
+            let targetID = targetRoot.dataset.id;
+            let installProm = fetch(`/target/${targetID}/stop`, { method: "POST" });
+            await installProm.then(r => {}).finally(r => { 
+                btn.disabled = false;
+            });
+        });
+    }
 
     let createVPSForms = document.querySelectorAll(".form-create-vps");
     for (const f of createVPSForms) {
@@ -92,16 +121,13 @@
                 i.disabled = true;
             }
 
-            // FIXME: implement deployment targets
-            let targetID = 0;
+            let createProm = fetch(`/target/create`, { method: "POST", body: form });
 
-            let installProm = fetch(`/target/create`, { method: "POST", body: form });
-
-            await installProm.then(r => {
-                r.json().then(tar => {
+            await createProm.then(r => {
+                return r.json().then(tar => {
                     deploymentTarget.appendChild(renderTemplate("template-target", {
                         // FIXME: get ID of created target
-                        ID: 0,
+                        ID: tar.ID,
                         User: tar.User,
                         Host: tar.Host,
                         Port: tar.Port,
@@ -109,8 +135,12 @@
                         // FIXME: get this from backend!
                         ContainerBackend: "docker",
                     }));
+
+                    return fetch(`/target/${tar.ID}/install`, { method: "POST" });
                 });
 
+            }).catch(err => {
+                alert(err);
             }).finally(r => { 
                 for (const i of is) {
                     i.disabled = false;

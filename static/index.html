@@ -4,18 +4,19 @@
 	</head>
 	<body>
         <template id="template-target">
-            <div>
-                <h3>Target #{{ID}}</h3>
+            <div class="target-info" data-id="{{ID}}">
+                <h3>Target #{{ID}} (<a href="https://{{Domain}}">{{Domain}}</a>)</h3>
                 <div>{{User}}@{{Host}}:{{Port}}</div>
-                <div>Domain: {{Domain}}</div>
                 <div>Run by: {{ContainerBackend}}</div>
+                <div>
+                    <button class="btn-target-start">Start</button>
+                    <button class="btn-target-stop">Stop</button>
+                    <button class="btn-target-check">Check</button>
+                </div>
             </div>
         </template>
         <div class="page-wrapper">
             <div>
-                <h2>This does not work</h2>
-                <button class="deployment_targets_add">Add a deployment target</button>
-
                 <div>
                     <h2>Install to a VPS</h2>
                     <form class="form-create-vps" action="/target/create" method="POST">
@@ -48,14 +49,9 @@
                             <input name="peertube_on" type="checkbox" />
                         </div>
 
-                        <button type="submit">Install</button>
-                        <button>Test connection</button>
+                        <button type="submit">Create</button>
                     </form>
                 </div>
-
-                <hr/>
-
-                <h2>This works</h2>
 
                 <div class="deployment_targets_list">
 

@@ -39,7 +39,8 @@ So first of all we create a target, run install script there, then run the servi
 This is a rough draft, to check the actual api look at the `main.go` where mux handlers are registered
 
 ```
-POST /target/create - create target with POST form data
+POST /target/create - create target with POST form data, returns target data in JSON format
+GET /target/list - get all targets in JSON format
 POST /target/{target_id}/update - update target with POST form data
 POST /target/{target_id}/install - install pre-requisites
 POST /target/{target_id}/start - run services

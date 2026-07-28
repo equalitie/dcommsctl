@@ -80,6 +80,7 @@ const (
 
 // This is a deployment target info, either cloud or VPS, for now only VPS
 type DeploymentTargetInfo struct {
+	ID     int
 	User   string
 	Host   string
 	Port   string
@@ -125,6 +126,7 @@ func sftpCopy(client *sftp.Client, srcPath, dstPath string) error {
 }
 
 func targetsSave(app Application) error {
+	// FIXME: since we're using JSON anyway, this should be saved to json
 	f, err := os.Create("./targets.csv")
 
 	if err != nil {
@@ -173,6 +175,7 @@ func targetsSave(app Application) error {
 }
 
 func targetsLoad(app Application) error {
+	// FIXME: since we're using JSON anyway, this should be loaded from json
 	f, err := os.Open("./targets.csv")
 
 	if err != nil {
@@ -692,6 +695,7 @@ func httpPostTargetCreate(app Application, w http.ResponseWriter, r *http.Reques
 
 	// FIXME: properly process form values
 	t := DeploymentTargetInfo{
+		ID:               maxId+1,
 		Host:             r.FormValue("host"),
 		User:             r.FormValue("username"),
 		Port:             r.FormValue("port"),
@@ -853,6 +857,7 @@ func httpPostRunInstallScript(app Application, w http.ResponseWriter, r *http.Re
 	if err != nil {
 		fmt.Println("Failed to parse target id:", err)
 		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Failed to parse target ID"))
 		return
 	}
 
@@ -861,6 +866,7 @@ func httpPostRunInstallScript(app Application, w http.ResponseWriter, r *http.Re
 	if !found {
 		fmt.Println("Target not found: ", target)
 		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Target not found"))
 		return
 	}
 
@@ -885,6 +891,7 @@ func httpPostRunInstallScript(app Application, w http.ResponseWriter, r *http.Re
 	if len(choices) == 0 {
 		fmt.Println("Install ran without any services selected")
 		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("No services selected"))
 		return
 	}
 
