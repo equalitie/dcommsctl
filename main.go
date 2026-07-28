@@ -5,6 +5,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -551,6 +552,17 @@ func postTestInstallation(app Application, w http.ResponseWriter, r *http.Reques
 	// TODO: implement a check script to see if we're ready to install Dcomms on deployment target
 }
 
+func httpGetTargets(app Application, w http.ResponseWriter, r *http.Request) {
+	out, err := json.Marshal(app.targets)
+
+	if err != nil {
+		fmt.Println("Failed to marshal targets into json:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Write(out)
+}
+
 func httpPostTargetCreate(app Application, w http.ResponseWriter, r *http.Request) {
 	maxId := 0
 
@@ -592,7 +604,14 @@ func httpPostTargetCreate(app Application, w http.ResponseWriter, r *http.Reques
 
 	fmt.Println("Target created. ID:", maxId+1)
 
-	// TODO: return JSON representation of the target from which client can construct
+	out, err := json.Marshal(t)
+
+	if err != nil {
+		fmt.Println("Failed to marshal target into json:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Write(out)
 }
 
 func httpPostTargetUpdate(app Application, w http.ResponseWriter, r *http.Request) {
@@ -676,6 +695,7 @@ func httpPostRunStopScript(app Application, w http.ResponseWriter, r *http.Reque
 	if !found {
 		fmt.Println("Target not found: ", target)
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Target not found: %s", target)
 		return
 	}
 
@@ -892,7 +912,6 @@ func main() {
 	mux.HandleFunc("GET /target/{target}/env/{id}", func(w http.ResponseWriter, r *http.Request) {
 		httpGetEnv(app, w, r)
 	})
-
 	mux.HandleFunc("POST /target/{target}/service/{id}/stop", func(w http.ResponseWriter, r *http.Request) {
 		httpPostServiceStop(app, w, r)
 	})

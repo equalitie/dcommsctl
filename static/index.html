@@ -9,7 +9,7 @@
 
                 <div>
                     <h2>Install to a VPS</h2>
-                    <form class="form-install-vps" action="/install" method="POST">
+                    <form class="form-create-vps" action="/target/create" method="POST">
                         <div>
                             <label for="host">Host</label>
                             <input name="host" type="text" value="172.232.204.97" />
@@ -27,8 +27,16 @@
                         </div>
 
                         <div>
-                            <label for="matrix-on">Install Matrix</label>
-                            <input name="matrix-on" type="checkbox" />
+                            <label for="matrix_on">Install Matrix</label>
+                            <input name="matrix_on" type="checkbox" />
+                            <label for="mau_on">Install Mau</label>
+                            <input name="mau_on" type="checkbox" />
+                            <label for="ceno_on">Install Ceno bridge</label>
+                            <input name="ceno_on" type="checkbox" />
+                            <label for="mastodon_on">Install Mastodon</label>
+                            <input name="mastodon_on" type="checkbox" />
+                            <label for="peertube_on">Install Peertube</label>
+                            <input name="peertube_on" type="checkbox" />
                         </div>
 
                         <button type="submit">Install</button>

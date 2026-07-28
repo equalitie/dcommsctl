@@ -52,12 +52,10 @@ Right now there is no properly working web UI so it's enough to just use curl:
 curl -d 'host=127.127.127.127&username=dcomms&port=22&domainname=domainname.org&backend=docker&matrix_on=on' localhost:8080/target/create
 ```
 
-Service choice is also hard-coded in main.go where the `install.sh` is called via CHOICES environment variable. Details are in the install.sh script.
-
 # TODO
 
+* make it possible to run commands on containers
+    * make SSH tunnel to call docker api on socket through SSH connection
+    * parse compose files to get service names and containers they run
+
 * debug install_podman.sh (right now only CENO, parts of Peertube and Mastodon are succesfully installed, Matrix setup hangs when running podman-compose up) 
-* implement choice of services you want to install
-* make it possible to check for the status of running services
-* actually handle running and stopping of podman services
-* fetch status of all services
