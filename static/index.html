@@ -3,8 +3,17 @@
         <link rel="stylesheet" href="/index.css"/>
 	</head>
 	<body>
+        <template id="template-target">
+            <div>
+                <h3>Target #{{ID}}</h3>
+                <div>{{User}}@{{Host}}:{{Port}}</div>
+                <div>Domain: {{Domain}}</div>
+                <div>Run by: {{ContainerBackend}}</div>
+            </div>
+        </template>
         <div class="page-wrapper">
             <div>
+                <h2>This does not work</h2>
                 <button class="deployment_targets_add">Add a deployment target</button>
 
                 <div>
@@ -43,6 +52,10 @@
                         <button>Test connection</button>
                     </form>
                 </div>
+
+                <hr/>
+
+                <h2>This works</h2>
 
                 <div class="deployment_targets_list">
 

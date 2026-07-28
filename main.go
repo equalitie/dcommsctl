@@ -665,7 +665,6 @@ func postTestInstallation(app Application, w http.ResponseWriter, r *http.Reques
 
 func httpGetTargets(app Application, w http.ResponseWriter, r *http.Request) {
 	out, err := json.Marshal(app.targets)
-
 	if err != nil {
 		fmt.Println("Failed to marshal targets into json:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -1043,6 +1042,9 @@ func main() {
 	})
 	mux.HandleFunc("POST /target/create", func(w http.ResponseWriter, r *http.Request) {
 		httpPostTargetCreate(app, w, r)
+	})
+	mux.HandleFunc("GET /target/list", func(w http.ResponseWriter, r *http.Request) {
+		httpGetTargets(app, w, r)
 	})
 	mux.HandleFunc("POST /target/{target}/update", func(w http.ResponseWriter, r *http.Request) {
 		httpPostTargetUpdate(app, w, r)
