@@ -400,10 +400,9 @@ func sshTunnel(t DeploymentTargetInfo, localAddr string) error {
 		}
 	}()
 
-	containerClient, err := client.NewClientWithOpts(
+	containerClient, err := client.New(
 		client.FromEnv,
 		client.WithHost("tcp://"+localAddr),
-		client.WithAPIVersionNegotiation(),
 	)
 
 	if err != nil {
@@ -447,11 +446,11 @@ func sshTunnel(t DeploymentTargetInfo, localAddr string) error {
 				continue
 			}
 
-			attachResp, err := containerClient.ExecAttach(ctx, createResp.ID, client.ExecAttachOptions{ })
+			attachResp, err := containerClient.ExecAttach(ctx, createResp.ID, client.ExecAttachOptions{})
 			if err != nil {
 				log.Fatalf("Failed to attach to exec: %v", err)
 			}
-			defer attachResp.Close() 
+			defer attachResp.Close()
 			var stdoutBuf bytes.Buffer
 			_, err = io.Copy(&stdoutBuf, attachResp.Reader)
 			if err != nil {
@@ -727,7 +726,7 @@ func httpPostTargetCreate(app Application, w http.ResponseWriter, r *http.Reques
 
 	// FIXME: properly process form values
 	t := DeploymentTargetInfo{
-		ID:               maxId+1,
+		ID:               maxId + 1,
 		Host:             r.FormValue("host"),
 		User:             r.FormValue("username"),
 		Port:             r.FormValue("port"),
