@@ -502,14 +502,14 @@ func sshExecCommand(c DeploymentTargetInfo, cmd string) error {
 	agentClient := agent.NewClient(conn)
 
 	config := &ssh.ClientConfig{
-		User: c.User,
+		User: t.User,
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeysCallback(agentClient.Signers),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
-	client, err := ssh.Dial("tcp", c.Host+":"+c.Port, config)
+	client, err := ssh.Dial("tcp", t.Host+":"+t.Port, config)
 
 	if err != nil {
 		return fmt.Errorf("unable to dial ssh: %v", err)
