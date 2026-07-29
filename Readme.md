@@ -27,6 +27,8 @@ A lot of the things are hardcoded for now. Podman implementation is bugged.
 
 The dcomms-docker-compose project is included not as a git submodule because of changes to the scripts. There's a temporary copy of install.sh script from that repo called install_podman.sh which is tailored for podman use.
 
+Targets are stored in `targets.csv` (soon to be JSON) file. If you need to remove all targets, just delete the file.
+
 # API
 
 The basic structure of entities looks like this:
