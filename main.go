@@ -22,14 +22,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/moby/moby/client"
 	"github.com/pkg/sftp"
-	"go.podman.io/podman/v6/pkg/bindings"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
-	// "go.podman.io/podman/v6/pkg/bindings/images"
-	// "go.podman.io/podman/v6/pkg/specgen"
-	// "github.com/gorilla/websocket"
 )
 
 // NOTE(max): this is currently the main implementation file
@@ -69,6 +64,11 @@ type ServiceConfig struct {
 	ComposePath string
 	ConfigFiles []ServiceConfigFile
 	ContainerID string
+}
+
+type MatrixConfigData struct {
+	AdminName string
+	AdminPass string
 }
 
 type ContainerBackendType int
@@ -328,81 +328,7 @@ func sshCopyProject(target DeploymentTargetInfo) error {
 	return nil
 }
 
-func sshDockerSend(t DeploymentTargetInfo, localAddr string) error {
-	if !t.SSHTunnelEstablished {
-		if err := sshTunnel(t, localAddr); err != nil {
-			return err
-		}
-	}
-
-	containerClient, err := client.New(
-		client.FromEnv,
-		client.WithHost("tcp://"+localAddr),
-	)
-
-	if err != nil {
-		return fmt.Errorf("Failed to create docker client: %s", err)
-	}
-	defer containerClient.Close()
-
-	ctx := context.TODO()
-
-	pingResult, err := containerClient.Ping(ctx, client.PingOptions{})
-
-	if err != nil {
-		return fmt.Errorf("Failed to ping docker client: %s", err)
-	}
-
-	fmt.Println("Docker API version", pingResult.APIVersion)
-
-	result, err := containerClient.ContainerList(context.Background(), client.ContainerListOptions{
-		All: true,
-	})
-	if err != nil {
-		return fmt.Errorf("Failed to list all docker containers: %s", err)
-	}
-
-	fmt.Printf("%s  %-22s  %s\n", "ID", "STATUS", "IMAGE")
-	for _, ctr := range result.Items {
-		// FIXME: just testing execution of commands, no idea for now how to call it directly on container
-		if strings.HasPrefix(ctr.Image, "matrixdotorg/synapse:") {
-			createResp, err := containerClient.ExecCreate(ctx, ctr.ID, client.ExecCreateOptions{
-				Cmd: []string{
-					"sh", "-c",
-					// FIXME: gen password and feed it from stdin
-					"register_new_matrix_user -u dcomms-admin -p test --admin -c /data/homeserver.yaml",
-				},
-				AttachStdout: true,
-				AttachStderr: true,
-			})
-
-			if err != nil {
-				fmt.Println("Failed to create exec command on container:", err)
-				continue
-			}
-
-			attachResp, err := containerClient.ExecAttach(ctx, createResp.ID, client.ExecAttachOptions{})
-			if err != nil {
-				log.Fatalf("Failed to attach to exec: %v", err)
-			}
-			defer attachResp.Close()
-			var stdoutBuf bytes.Buffer
-			_, err = io.Copy(&stdoutBuf, attachResp.Reader)
-			if err != nil {
-				log.Fatalf("Failed to read output: %v", err)
-			}
-
-			fmt.Println("--- Running command on container ---")
-			fmt.Println(stdoutBuf.String())
-			fmt.Println("---     End of command output    ---")
-
-		}
-		fmt.Printf("%s  %-22s  %s\n", ctr.ID, ctr.Status, ctr.Image)
-	}
-	return nil
-}
-
-func sshTunnel(t DeploymentTargetInfo, localAddr string) error {
+func sshTunnel(ctx context.Context, t DeploymentTargetInfo, localAddr string) error {
 	socket := os.Getenv("SSH_AUTH_SOCK")
 
 	conn, err := net.Dial("unix", socket)
@@ -485,11 +411,15 @@ func sshTunnel(t DeploymentTargetInfo, localAddr string) error {
 		}
 	}()
 
+	if err := sshExecCommand(t, `docker ps -a --format "table {{.Names}}\t{{.Status}}"`); err != nil {
+		return fmt.Errorf("Failed to get data on compose containers: %s", err)
+	}
+
 	return nil
 }
 
 // FIXME: we need to get result out, either write to a buffer or something
-func sshExecCommand(c DeploymentTargetInfo, cmd string) error {
+func sshExecCommand(t DeploymentTargetInfo, cmd string) error {
 	socket := os.Getenv("SSH_AUTH_SOCK")
 
 	conn, err := net.Dial("unix", socket)
@@ -823,8 +753,12 @@ func httpPostRunCheckScript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx := r.Context()
+
 	// TODO: pick a new port for different target
-	if err := sshDockerSend(t, "localhost:3000"); err != nil {
+	cli, err := sshDockerSend(ctx, t, "localhost:3000")
+
+	if err != nil {
 		t.SSHTunnelEstablished = false
 		fmt.Println("Failed to tunnel to docker", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -835,6 +769,14 @@ func httpPostRunCheckScript(w http.ResponseWriter, r *http.Request) {
 	t.SSHTunnelEstablished = true
 
 	app.targets[t.ID] = t
+
+	if err := sshDockerList(ctx, cli); err != nil {
+		fmt.Println("Failed to list docker containers", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Listing containers on target failed: %s", err)
+		return
+	}
+
 }
 
 func httpPostRunStopScript(w http.ResponseWriter, r *http.Request) {
@@ -892,7 +834,7 @@ func httpPostRunInstallScript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("ssh", "-o", "ControlMaster=no", "-o", "ControlPath=none",  t.User+"@"+t.Host, "bash -c", string(installScriptContents))
+	cmd := exec.Command("ssh", "-o", "ControlMaster=no", "-o", "ControlPath=none", t.User+"@"+t.Host, "bash -c", string(installScriptContents))
 	// FIXME: we need a unified output buffer we're sending back to the client
 	// TODO: we need to also stream this, not wait for the whole output and probably leave some markers in output to check for progress
 	output, err := cmd.CombinedOutput()
@@ -950,22 +892,6 @@ func httpGetEnv(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write(env)
-}
-
-func podmanConnect(rootContext context.Context) context.Context {
-	podmanSocket := os.Getenv("PODMAN_SOCKET")
-
-	if podmanSocket == "" {
-		log.Fatalln("You need to set PODMAN_SOCKET to a path to socket file for running podman. See run.sh for example")
-	}
-
-	ctx, err := bindings.NewConnection(rootContext, "unix://"+podmanSocket)
-	if err != nil {
-		log.Fatalln(err)
-		return nil
-	}
-
-	return ctx
 }
 
 func main() {

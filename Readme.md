@@ -56,6 +56,10 @@ Right now there is no properly working web UI so it's enough to just use curl:
 curl -d 'host=127.127.127.127&username=dcomms&port=22&domainname=domainname.org&backend=docker&matrix_on=on' localhost:8080/target/create
 ```
 
+# Matrix
+
+Right now `/target/{target_id}/check` is calling Matrix post installation script
+
 # TODO
 
 * make it possible to run commands on containers
