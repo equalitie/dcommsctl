@@ -105,6 +105,12 @@ type Application struct {
 	systemCfg SystemConfig
 }
 
+func NewApplication() Application {
+	return Application{
+		targets: make(map[int]DeploymentTargetInfo),
+	}
+}
+
 func sftpCopy(client *sftp.Client, srcPath, dstPath string) error {
 	srcFile, err := os.Open(srcPath)
 	if err != nil {
@@ -208,6 +214,7 @@ func targetsLoad(app Application) error {
 			fmt.Printf("No services specified for a target %d, ignoring\n", id)
 			continue
 		}
+
 		containerBackend := ContainerBackendType(ContainerBackendDocker)
 
 		if backend == "podman" {
@@ -245,12 +252,6 @@ func targetsLoad(app Application) error {
 	return nil
 }
 
-func NewApplication() Application {
-	return Application{
-		targets: make(map[int]DeploymentTargetInfo),
-	}
-}
-
 func copyFolder(client *sftp.Client, src, dst string) error {
 	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -258,7 +259,7 @@ func copyFolder(client *sftp.Client, src, dst string) error {
 		}
 		relPath, _ := filepath.Rel(src, path)
 		if relPath == "." {
-			return nil // Skip root
+			return nil
 		}
 		dstPath := filepath.Join(dst, relPath)
 
@@ -277,7 +278,7 @@ func copyFolder(client *sftp.Client, src, dst string) error {
 		defer srcFile.Close()
 		dstFile, err := client.Create(dstPath)
 		if err != nil {
-			return fmt.Errorf("create err: %s", err)
+			return fmt.Errorf("Create err: %s", err)
 		}
 		defer dstFile.Close()
 		_, err = io.Copy(dstFile, srcFile)
@@ -285,7 +286,7 @@ func copyFolder(client *sftp.Client, src, dst string) error {
 	})
 }
 
-func copyProject(target DeploymentTargetInfo) error {
+func sshCopyProject(target DeploymentTargetInfo) error {
 	fmt.Println("Starting copy")
 	pathToDcomms := os.Getenv("DCOMMS_GIT_REPO_PATH")
 
@@ -329,76 +330,11 @@ func copyProject(target DeploymentTargetInfo) error {
 }
 
 func sshDockerSend(t DeploymentTargetInfo, localAddr string) error {
-
 	if !t.SSHTunnelEstablished {
-		sshTunnel(t, localAddr)
-	}
-
-	return nil
-}
-
-func sshTunnel(t DeploymentTargetInfo, localAddr string) error {
-	socket := os.Getenv("SSH_AUTH_SOCK")
-
-	conn, err := net.Dial("unix", socket)
-
-	if err != nil {
-		return fmt.Errorf("Unable to connect to ssh-agent socket: %s", err)
-	}
-
-	agentClient := agent.NewClient(conn)
-
-	config := &ssh.ClientConfig{
-		User: t.User,
-		Auth: []ssh.AuthMethod{
-			ssh.PublicKeysCallback(agentClient.Signers),
-		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	}
-
-	remoteSSHClient, err := ssh.Dial("tcp", t.Host+":"+t.Port, config)
-
-	if err != nil {
-		return fmt.Errorf("Unable to dial ssh: %v", err)
-	}
-	defer remoteSSHClient.Close()
-
-	listener, err := net.Listen("tcp", localAddr)
-
-	if err != nil {
-		return fmt.Errorf("Failed to listen on local address: %s", err)
-	}
-
-	go func() {
-		for {
-			localConn, err := listener.Accept()
-
-			if err != nil {
-				log.Printf("Failed to accept local connection: %s", err)
-				continue
-			}
-
-			remoteConn, err := remoteSSHClient.Dial("unix", "/var/run/docker.sock")
-
-			if err != nil {
-				log.Printf("Failed to dial remote Docker socket: %s", err)
-				localConn.Close()
-				continue
-			}
-
-			go func() {
-				defer localConn.Close()
-				defer remoteConn.Close()
-				io.Copy(localConn, remoteConn)
-			}()
-
-			go func() {
-				defer localConn.Close()
-				defer remoteConn.Close()
-				io.Copy(remoteConn, localConn)
-			}()
+		if err := sshTunnel(t, localAddr); err != nil {
+			return err
 		}
-	}()
+	}
 
 	containerClient, err := client.New(
 		client.FromEnv,
@@ -410,7 +346,7 @@ func sshTunnel(t DeploymentTargetInfo, localAddr string) error {
 	}
 	defer containerClient.Close()
 
-	ctx := context.Background()
+	ctx := context.TODO()
 
 	pingResult, err := containerClient.Ping(ctx, client.PingOptions{})
 
@@ -464,6 +400,90 @@ func sshTunnel(t DeploymentTargetInfo, localAddr string) error {
 		}
 		fmt.Printf("%s  %-22s  %s\n", ctr.ID, ctr.Status, ctr.Image)
 	}
+	return nil
+}
+
+func sshTunnel(t DeploymentTargetInfo, localAddr string) error {
+	socket := os.Getenv("SSH_AUTH_SOCK")
+
+	conn, err := net.Dial("unix", socket)
+
+	if err != nil {
+		return fmt.Errorf("Unable to connect to ssh-agent socket: %s", err)
+	}
+
+	agentClient := agent.NewClient(conn)
+
+	config := &ssh.ClientConfig{
+		User: t.User,
+		Auth: []ssh.AuthMethod{
+			ssh.PublicKeysCallback(agentClient.Signers),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+
+	remoteSSHClient, err := ssh.Dial("tcp", t.Host+":"+t.Port, config)
+
+	if err != nil {
+		return fmt.Errorf("Unable to dial ssh: %v", err)
+	}
+	// FIXME: when are we closing this?
+	// defer remoteSSHClient.Close()
+	listener, err := net.Listen("tcp", localAddr)
+
+	if err != nil {
+		return fmt.Errorf("Failed to listen on local address: %s", err)
+	}
+
+	go func() {
+		idleTimer := time.NewTimer(10 * time.Second)
+		idleTimer.Stop()
+
+		resetIdleTimer := func() {
+			if !idleTimer.Stop() {
+				<-idleTimer.C
+			}
+			idleTimer.Reset(10 * time.Second)
+		}
+
+		go func() {
+			<-idleTimer.C
+			fmt.Println("SSH tunnel idle. Closing...")
+			remoteSSHClient.Close()
+			listener.Close()
+		}()
+
+		for {
+			localConn, err := listener.Accept()
+
+			if err != nil {
+				log.Printf("Failed to accept local connection: %s", err)
+				continue
+			}
+
+			remoteConn, err := remoteSSHClient.Dial("unix", "/var/run/docker.sock")
+
+			if err != nil {
+				log.Printf("Failed to dial remote Docker socket: %s", err)
+				localConn.Close()
+				continue
+			}
+
+			go func() {
+				defer localConn.Close()
+				defer remoteConn.Close()
+				io.Copy(localConn, remoteConn)
+				resetIdleTimer()
+			}()
+
+			go func() {
+				defer localConn.Close()
+				defer remoteConn.Close()
+				io.Copy(remoteConn, localConn)
+				resetIdleTimer()
+			}()
+		}
+	}()
 
 	return nil
 }
@@ -580,10 +600,9 @@ func getEnv(app Application, target DeploymentTargetInfo, serviceID string) ([]b
 		return nil, err
 	}
 
-	services := bytes.Split(stdoutBuf.Bytes(), []byte("\n"))
+	services := bytes.SplitSeq(stdoutBuf.Bytes(), []byte("\n"))
 
-	for _, serviceName := range services {
-
+	for serviceName := range services {
 		name := string(serviceName)
 		if name == "" {
 			continue
@@ -595,109 +614,89 @@ func getEnv(app Application, target DeploymentTargetInfo, serviceID string) ([]b
 			return nil, err
 		}
 
-		out.WriteString(string(serviceName) + "\n")
-
-		out.WriteString("==========\n\n")
+		out.WriteString(name)
+		out.WriteString("\n==========\n\n")
 	}
 
 	return out.Bytes(), nil
 }
 
-func httpGetInfo(app Application, w http.ResponseWriter, r *http.Request) {
+func getTargetFromRequest(app Application, r *http.Request) (DeploymentTargetInfo, error) {
 	target, err := strconv.Atoi(r.PathValue("target"))
 
 	if err != nil {
-		fmt.Println("Failed to parse target id:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return DeploymentTargetInfo{}, fmt.Errorf("Failed to parse target id: %s", err)
 	}
 
 	t, found := app.targets[target]
 
 	if !found {
-		fmt.Println("Target not found: ", target)
+		return DeploymentTargetInfo{}, fmt.Errorf("Target not found: %d", target)
+	}
+
+	return t, nil
+}
+
+func httpGetInfo(w http.ResponseWriter, r *http.Request) {
+	app := r.Context().Value("app").(Application)
+	t, err := getTargetFromRequest(app, r)
+
+	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
 		return
 	}
+
 	w.Write(remoteOsStatus(t))
 }
 
-func httpPostServiceStart(app Application, w http.ResponseWriter, r *http.Request) {
+func httpPostServiceStart(w http.ResponseWriter, r *http.Request) {
+	app := r.Context().Value("app").(Application)
 	serviceID := r.PathValue("id")
-	target, err := strconv.Atoi(r.PathValue("target"))
+	t, err := getTargetFromRequest(app, r)
 
 	if err != nil {
-		fmt.Println("Failed to parse target id:", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	t, found := app.targets[target]
-
-	if !found {
-		fmt.Println("Target not found: ", target)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
 		return
 	}
 
 	remoteServiceUp(app, t, serviceID)
 }
 
-func httpPostServiceStop(app Application, w http.ResponseWriter, r *http.Request) {
+func httpPostServiceStop(w http.ResponseWriter, r *http.Request) {
+	app := r.Context().Value("app").(Application)
 	serviceID := r.PathValue("id")
-	target, err := strconv.Atoi(r.PathValue("target"))
+	t, err := getTargetFromRequest(app, r)
 
 	if err != nil {
-		fmt.Println("Failed to parse target id:", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	t, found := app.targets[target]
-
-	if !found {
-		fmt.Println("Target not found: ", target)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
 		return
 	}
 
 	remoteServiceDown(app, t, serviceID)
 }
 
-func httpPostPanic(app Application, w http.ResponseWriter, r *http.Request) {
-	target, err := strconv.Atoi(r.PathValue("target"))
+func httpPostPanic(w http.ResponseWriter, r *http.Request) {
+	app := r.Context().Value("app").(Application)
+	_, err := getTargetFromRequest(app, r)
 
 	if err != nil {
-		fmt.Println("Failed to parse target id:", err)
 		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
 		return
 	}
 
-	t, found := app.targets[target]
-
-	if !found {
-		fmt.Println("Target not found: ", target)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	serviceStopAll(app, t)
 	// TODO: remove all volumes
-}
-
-func serviceStopAll(app Application, target DeploymentTargetInfo) {
-
-	for serviceID := range app.systemCfg.Services {
-		if err := remoteServiceDown(app, target, serviceID); err != nil {
-			log.Printf("Failed to bring compose down: %s", err)
-		}
-	}
 }
 
 func postTestInstallation(app Application, w http.ResponseWriter, r *http.Request) {
 	// TODO: implement a check script to see if we're ready to install Dcomms on deployment target
 }
 
-func httpGetTargets(app Application, w http.ResponseWriter, r *http.Request) {
+func httpGetTargets(w http.ResponseWriter, r *http.Request) {
+	app := r.Context().Value("app").(Application)
 	out, err := json.Marshal(app.targets)
 	if err != nil {
 		fmt.Println("Failed to marshal targets into json:", err)
@@ -707,7 +706,8 @@ func httpGetTargets(app Application, w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
-func httpPostTargetCreate(app Application, w http.ResponseWriter, r *http.Request) {
+func httpPostTargetCreate(w http.ResponseWriter, r *http.Request) {
+	app := r.Context().Value("app").(Application)
 	maxId := 0
 
 	// for now we just pick the biggest ID
@@ -759,25 +759,18 @@ func httpPostTargetCreate(app Application, w http.ResponseWriter, r *http.Reques
 	w.Write(out)
 }
 
-func httpPostTargetUpdate(app Application, w http.ResponseWriter, r *http.Request) {
-	target, err := strconv.Atoi(r.PathValue("target"))
+func httpPostTargetUpdate(w http.ResponseWriter, r *http.Request) {
+	app := r.Context().Value("app").(Application)
+	t, err := getTargetFromRequest(app, r)
 
 	if err != nil {
-		fmt.Println("Failed to parse target id:", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	_, found := app.targets[target]
-
-	if !found {
-		fmt.Println("Target not found: ", target)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
 		return
 	}
 
 	// FIXME: properly process form values
-	app.targets[target] = DeploymentTargetInfo{
+	app.targets[t.ID] = DeploymentTargetInfo{
 		Host:            r.FormValue("host"),
 		User:            r.FormValue("username"),
 		Port:            r.FormValue("port"),
@@ -791,23 +784,16 @@ func httpPostTargetUpdate(app Application, w http.ResponseWriter, r *http.Reques
 
 	targetsSave(app)
 
-	fmt.Println("Target updated. ID:", target)
+	fmt.Println("Target updated. ID:", t.ID)
 }
 
-func httpPostRunStartupScript(app Application, w http.ResponseWriter, r *http.Request) {
-	target, err := strconv.Atoi(r.PathValue("target"))
+func httpPostRunStartupScript(w http.ResponseWriter, r *http.Request) {
+	app := r.Context().Value("app").(Application)
+	t, err := getTargetFromRequest(app, r)
 
 	if err != nil {
-		fmt.Println("Failed to parse target id:", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	t, found := app.targets[target]
-
-	if !found {
-		fmt.Println("Target not found: ", target)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
 		return
 	}
 
@@ -826,48 +812,37 @@ func httpPostRunStartupScript(app Application, w http.ResponseWriter, r *http.Re
 	}
 }
 
-func httpPostRunCheckScript(app Application, w http.ResponseWriter, r *http.Request) {
-	target, err := strconv.Atoi(r.PathValue("target"))
+func httpPostRunCheckScript(w http.ResponseWriter, r *http.Request) {
+	app := r.Context().Value("app").(Application)
+	t, err := getTargetFromRequest(app, r)
 
 	if err != nil {
-		fmt.Println("Failed to parse target id:", err)
 		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
 		return
 	}
 
-	t, found := app.targets[target]
-
-	if !found {
-		fmt.Println("Target not found: ", target)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
+	// TODO: pick a new port for different target
 	if err := sshDockerSend(t, "localhost:3000"); err != nil {
+		t.SSHTunnelEstablished = false
 		fmt.Println("Failed to tunnel to docker", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "Tunnel failed: %s", err)
 		return
 	}
 
-	app.targets[target] = t
+	t.SSHTunnelEstablished = true
+
+	app.targets[t.ID] = t
 }
 
-func httpPostRunStopScript(app Application, w http.ResponseWriter, r *http.Request) {
-	target, err := strconv.Atoi(r.PathValue("target"))
+func httpPostRunStopScript(w http.ResponseWriter, r *http.Request) {
+	app := r.Context().Value("app").(Application)
+	t, err := getTargetFromRequest(app, r)
 
 	if err != nil {
-		fmt.Println("Failed to parse target id:", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	t, found := app.targets[target]
-
-	if !found {
-		fmt.Println("Target not found: ", target)
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Target not found: %s", target)
+		w.Write([]byte(err.Error()))
 		return
 	}
 
@@ -882,25 +857,15 @@ func httpPostRunStopScript(app Application, w http.ResponseWriter, r *http.Reque
 	}
 }
 
-func httpPostRunInstallScript(app Application, w http.ResponseWriter, r *http.Request) {
-	target, err := strconv.Atoi(r.PathValue("target"))
+func httpPostRunInstallScript(w http.ResponseWriter, r *http.Request) {
+	app := r.Context().Value("app").(Application)
+	t, err := getTargetFromRequest(app, r)
 
 	if err != nil {
-		fmt.Println("Failed to parse target id:", err)
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Failed to parse target ID"))
-		return
-	}
-
-	t, found := app.targets[target]
-
-	if !found {
-		fmt.Println("Target not found: ", target)
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Target not found"))
+		w.Write([]byte(err.Error()))
 		return
 	}
-
 	choices := []string{}
 
 	if t.MatrixEnabled {
@@ -953,7 +918,7 @@ func httpPostRunInstallScript(app Application, w http.ResponseWriter, r *http.Re
 
 	fmt.Println("--- End of pre-req install script  ---")
 
-	if err := copyProject(t); err != nil {
+	if err := sshCopyProject(t); err != nil {
 		fmt.Println("Failed to copy project files:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -975,22 +940,15 @@ func httpPostRunInstallScript(app Application, w http.ResponseWriter, r *http.Re
 	}
 }
 
-func httpGetEnv(app Application, w http.ResponseWriter, r *http.Request) {
+func httpGetEnv(w http.ResponseWriter, r *http.Request) {
+	app := r.Context().Value("app").(Application)
 	serviceID := r.PathValue("id")
 
-	target, err := strconv.Atoi(r.PathValue("target"))
+	t, err := getTargetFromRequest(app, r)
 
 	if err != nil {
-		fmt.Println("Failed to parse target id:", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	t, found := app.targets[target]
-
-	if !found {
-		fmt.Println("Target not found: ", target)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
 		return
 	}
 
@@ -1019,15 +977,16 @@ func podmanConnect(rootContext context.Context) context.Context {
 	}
 
 	return ctx
-
 }
 
 func main() {
-	rootContext := context.Background()
 	serverError := make(chan error, 1)
 	stop := make(chan os.Signal, 1)
 	app := NewApplication()
 	targetsLoad(app)
+
+	tmpCtx := context.Background()
+	rootContext := context.WithValue(tmpCtx, "app", app)
 
 	app.ctx = rootContext
 
@@ -1075,42 +1034,18 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.Handle("GET /", fileServer)
-	mux.HandleFunc("GET /target/{target}/info", func(w http.ResponseWriter, r *http.Request) {
-		httpGetInfo(app, w, r)
-	})
-	mux.HandleFunc("POST /target/create", func(w http.ResponseWriter, r *http.Request) {
-		httpPostTargetCreate(app, w, r)
-	})
-	mux.HandleFunc("GET /target/list", func(w http.ResponseWriter, r *http.Request) {
-		httpGetTargets(app, w, r)
-	})
-	mux.HandleFunc("POST /target/{target}/update", func(w http.ResponseWriter, r *http.Request) {
-		httpPostTargetUpdate(app, w, r)
-	})
-	mux.HandleFunc("GET /target/{target}/env/{id}", func(w http.ResponseWriter, r *http.Request) {
-		httpGetEnv(app, w, r)
-	})
-	mux.HandleFunc("POST /target/{target}/service/{id}/stop", func(w http.ResponseWriter, r *http.Request) {
-		httpPostServiceStop(app, w, r)
-	})
-	mux.HandleFunc("POST /target/{target}/service/{id}/start", func(w http.ResponseWriter, r *http.Request) {
-		httpPostServiceStart(app, w, r)
-	})
-	mux.HandleFunc("POST /target/{target}/install", func(w http.ResponseWriter, r *http.Request) {
-		httpPostRunInstallScript(app, w, r)
-	})
-	mux.HandleFunc("POST /target/{target}/start", func(w http.ResponseWriter, r *http.Request) {
-		httpPostRunStartupScript(app, w, r)
-	})
-	mux.HandleFunc("POST /target/{target}/stop", func(w http.ResponseWriter, r *http.Request) {
-		httpPostRunStopScript(app, w, r)
-	})
-	mux.HandleFunc("POST /target/{target}/check", func(w http.ResponseWriter, r *http.Request) {
-		httpPostRunCheckScript(app, w, r)
-	})
-	mux.HandleFunc("POST /target/{target}/panic/", func(w http.ResponseWriter, r *http.Request) {
-		httpPostPanic(app, w, r)
-	})
+	mux.HandleFunc("GET /target/{target}/info", httpGetInfo)
+	mux.HandleFunc("POST /target/create", httpPostTargetCreate)
+	mux.HandleFunc("GET /target/list", httpGetTargets)
+	mux.HandleFunc("POST /target/{target}/update", httpPostTargetUpdate)
+	mux.HandleFunc("GET /target/{target}/env/{id}", httpGetEnv)
+	mux.HandleFunc("POST /target/{target}/service/{id}/stop", httpPostServiceStop)
+	mux.HandleFunc("POST /target/{target}/service/{id}/start", httpPostServiceStart)
+	mux.HandleFunc("POST /target/{target}/install", httpPostRunInstallScript)
+	mux.HandleFunc("POST /target/{target}/start", httpPostRunStartupScript)
+	mux.HandleFunc("POST /target/{target}/stop", httpPostRunStopScript)
+	mux.HandleFunc("POST /target/{target}/check", httpPostRunCheckScript)
+	mux.HandleFunc("POST /target/{target}/panic/", httpPostPanic)
 
 	addr := os.Getenv("WEBHOST_PORT")
 
@@ -1124,6 +1059,7 @@ func main() {
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
+		BaseContext:  func(net.Listener) context.Context { return rootContext },
 	}
 	go func() {
 		if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
@@ -1142,7 +1078,6 @@ func main() {
 	ctx, cancel := context.WithTimeout(rootContext, 15*time.Second)
 	defer cancel()
 
-	// serviceStopAll(app)
 	// log.Println("Compose services are shut down")
 
 	if err := server.Shutdown(ctx); err != nil {
