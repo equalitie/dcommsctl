@@ -293,10 +293,10 @@ func sshCopyProject(target DeploymentTargetInfo) error {
 	socket := os.Getenv("SSH_AUTH_SOCK")
 
 	conn, err := net.Dial("unix", socket)
-
 	if err != nil {
 		return fmt.Errorf("unable to connect to ssh-agent socket: %v", err)
 	}
+	defer conn.Close()
 
 	agentClient := agent.NewClient(conn)
 
@@ -309,13 +309,12 @@ func sshCopyProject(target DeploymentTargetInfo) error {
 	}
 
 	client, err := ssh.Dial("tcp", target.Host+":"+target.Port, config)
-
 	if err != nil {
 		return err
 	}
 	defer client.Close()
-	sftpClient, err := sftp.NewClient(client)
 
+	sftpClient, err := sftp.NewClient(client)
 	if err != nil {
 		return fmt.Errorf("Failed to init sftp connection: %s", err)
 	}
@@ -411,6 +410,7 @@ func sshTunnel(t DeploymentTargetInfo, localAddr string) error {
 	if err != nil {
 		return fmt.Errorf("Unable to connect to ssh-agent socket: %s", err)
 	}
+	defer conn.Close()
 
 	agentClient := agent.NewClient(conn)
 
@@ -497,6 +497,7 @@ func sshExecCommand(c DeploymentTargetInfo, cmd string) error {
 	if err != nil {
 		return fmt.Errorf("unable to connect to ssh-agent socket: %v", err)
 	}
+	defer conn.Close()
 
 	agentClient := agent.NewClient(conn)
 
@@ -900,10 +901,20 @@ func httpPostRunInstallScript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	stdinErrs := make(chan error, 1)
+
 	go func() {
 		defer stdin.Close()
-		stdin.Write(installScriptContents)
+		_, err := stdin.Write(installScriptContents)
+		stdinErrs <- err
 	}()
+
+
+	if err := <-stdinErrs; err != nil {
+		fmt.Println("Error sending to stdin", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	// FIXME: we need a unified output buffer we're sending back to the client
 	output, err := cmd.CombinedOutput()
