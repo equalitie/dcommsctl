@@ -6,6 +6,12 @@ sudo apt-get update
 
 sudo apt-get install -y dnsutils curl aria2 tor 
 
+# this is in case of reinstall
+podman container stop --all || true
+podman system prune -af || true
+docker stop $(docker ps -q) || true
+docker system prune -af || true
+
 if [ -z "$DCOMMS_USE_PODMAN" ]; then
     # The Docker path
     sudo apt-get update
