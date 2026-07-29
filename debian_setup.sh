@@ -14,7 +14,6 @@ docker system prune -af || true
 
 if [ -z "$DCOMMS_USE_PODMAN" ]; then
     # The Docker path
-    sudo apt-get update
     sudo apt-get install -y ca-certificates curl
     sudo install -m 0755 -d /etc/apt/keyrings
     sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc

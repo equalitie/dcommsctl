@@ -892,33 +892,12 @@ func httpPostRunInstallScript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("ssh", t.User+"@"+t.Host, "bash -s")
-	stdin, err := cmd.StdinPipe()
-
-	if err != nil {
-		fmt.Println("Error accessing std in", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	stdinErrs := make(chan error, 1)
-
-	go func() {
-		defer stdin.Close()
-		_, err := stdin.Write(installScriptContents)
-		stdinErrs <- err
-	}()
-
-
-	if err := <-stdinErrs; err != nil {
-		fmt.Println("Error sending to stdin", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
+	cmd := exec.Command("ssh", "-o", "ControlMaster=no", "-o", "ControlPath=none",  t.User+"@"+t.Host, "bash -c", string(installScriptContents))
 	// FIXME: we need a unified output buffer we're sending back to the client
+	// TODO: we need to also stream this, not wait for the whole output and probably leave some markers in output to check for progress
 	output, err := cmd.CombinedOutput()
 	fmt.Println("--- Running pre-req install script ---")
+
 	fmt.Println(string(output))
 	if err != nil {
 		fmt.Println(t.Host, t.User, t.Port)
@@ -926,7 +905,6 @@ func httpPostRunInstallScript(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
 	fmt.Println("--- End of pre-req install script  ---")
 
 	if err := sshCopyProject(t); err != nil {
@@ -1067,9 +1045,9 @@ func main() {
 	server := &http.Server{
 		Addr:         addr,
 		Handler:      mux,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  120 * time.Second,
+		WriteTimeout: 120 * time.Second,
+		IdleTimeout:  120 * time.Second,
 		BaseContext:  func(net.Listener) context.Context { return rootContext },
 	}
 	go func() {
@@ -1088,8 +1066,6 @@ func main() {
 	log.Println("Shutting down the server...")
 	ctx, cancel := context.WithTimeout(rootContext, 15*time.Second)
 	defer cancel()
-
-	// log.Println("Compose services are shut down")
 
 	if err := server.Shutdown(ctx); err != nil {
 		log.Printf("Server shutdown error: %s", err)
