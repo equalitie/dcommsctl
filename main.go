@@ -484,38 +484,6 @@ func remoteOsStatus(target DeploymentTargetInfo) []byte {
 	return buf.Bytes()
 }
 
-func remoteServiceDown(app Application, target DeploymentTargetInfo, serviceID string) error {
-	serviceCfg, found := app.systemCfg.Services[serviceID]
-
-	if !found {
-		return fmt.Errorf("Service is not registered %s", serviceID)
-	}
-
-	cmd := fmt.Sprintf("podman-compose -f %s down", path.Join("/home", target.User, "dcomms", "setup", "conf", "compose", serviceCfg.ComposePath))
-
-	if err := sshExecCommand(target, cmd); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func remoteServiceUp(app Application, target DeploymentTargetInfo, serviceID string) error {
-	serviceCfg, found := app.systemCfg.Services[serviceID]
-
-	if !found {
-		return fmt.Errorf("Service is not registered %s", serviceID)
-	}
-
-	cmd := fmt.Sprintf("podman-compose -d -f %s up", path.Join("/home", target.User, "dcomms", "setup", "conf", "compose", serviceCfg.ComposePath))
-
-	if err := sshExecCommand(target, cmd); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func getEnv(app Application, target DeploymentTargetInfo, serviceID string) ([]byte, error) {
 	serviceCfg, found := app.systemCfg.Services[serviceID]
 
@@ -581,34 +549,6 @@ func httpGetInfo(w http.ResponseWriter, r *http.Request) {
 	w.Write(remoteOsStatus(t))
 }
 
-func httpPostServiceStart(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
-	serviceID := r.PathValue("id")
-	t, err := getTargetFromRequest(app, r)
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
-	}
-
-	remoteServiceUp(app, t, serviceID)
-}
-
-func httpPostServiceStop(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
-	serviceID := r.PathValue("id")
-	t, err := getTargetFromRequest(app, r)
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
-	}
-
-	remoteServiceDown(app, t, serviceID)
-}
-
 func httpPostPanic(w http.ResponseWriter, r *http.Request) {
 	app := r.Context().Value("app").(Application)
 	_, err := getTargetFromRequest(app, r)
@@ -622,7 +562,7 @@ func httpPostPanic(w http.ResponseWriter, r *http.Request) {
 	// TODO: remove all volumes
 }
 
-func postTestInstallation(app Application, w http.ResponseWriter, r *http.Request) {
+func httPostTestInstallation(app Application, w http.ResponseWriter, r *http.Request) {
 	// TODO: implement a check script to see if we're ready to install Dcomms on deployment target
 }
 
@@ -770,10 +710,10 @@ func httpPostRunCheckScript(w http.ResponseWriter, r *http.Request) {
 
 	app.targets[t.ID] = t
 
-	if err := sshDockerList(ctx, cli); err != nil {
-		fmt.Println("Failed to list docker containers", err)
+	if err := sshDockerInspectContainers(ctx, cli); err != nil {
+		fmt.Println("Failed to inspect docker containers", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Listing containers on target failed: %s", err)
+		fmt.Fprintf(w, "Inspecting containers on target failed: %s", err)
 		return
 	}
 
@@ -954,8 +894,6 @@ func main() {
 	mux.HandleFunc("GET /target/list", httpGetTargets)
 	mux.HandleFunc("POST /target/{target}/update", httpPostTargetUpdate)
 	mux.HandleFunc("GET /target/{target}/env/{id}", httpGetEnv)
-	mux.HandleFunc("POST /target/{target}/service/{id}/stop", httpPostServiceStop)
-	mux.HandleFunc("POST /target/{target}/service/{id}/start", httpPostServiceStart)
 	mux.HandleFunc("POST /target/{target}/install", httpPostRunInstallScript)
 	mux.HandleFunc("POST /target/{target}/start", httpPostRunStartupScript)
 	mux.HandleFunc("POST /target/{target}/stop", httpPostRunStopScript)

@@ -11,18 +11,19 @@ import (
 	// "github.com/gorilla/websocket"
 )
 
-func podmanConnect(rootContext context.Context) context.Context {
+func podmanConnect(ctx context.Context) context.Context {
 	podmanSocket := os.Getenv("PODMAN_SOCKET")
 
 	if podmanSocket == "" {
 		log.Fatalln("You need to set PODMAN_SOCKET to a path to socket file for running podman. See run.sh for example")
+		return nil
 	}
 
-	ctx, err := bindings.NewConnection(rootContext, "unix://"+podmanSocket)
+	c, err := bindings.NewConnection(ctx, "unix://"+podmanSocket)
 	if err != nil {
 		log.Fatalln(err)
 		return nil
 	}
 
-	return ctx
+	return c
 }

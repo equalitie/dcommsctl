@@ -4,6 +4,7 @@ go 1.26.4
 
 require (
 	github.com/compose-spec/compose-go/v2 v2.13.0
+	github.com/moby/moby/api v1.54.2
 	github.com/moby/moby/client v0.4.1
 	github.com/pkg/sftp v1.13.10
 	go.podman.io/podman/v6 v6.0.0
@@ -34,7 +35,6 @@ require (
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/mattn/go-shellwords v1.0.13 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
-	github.com/moby/moby/api v1.54.2 // indirect
 	github.com/moby/sys/capability v0.4.0 // indirect
 	github.com/moby/sys/mountinfo v0.7.2 // indirect
 	github.com/moby/sys/user v0.4.0 // indirect
