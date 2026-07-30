@@ -58,7 +58,7 @@ curl -d 'host=127.127.127.127&username=dcomms&port=22&domainname=domainname.org&
 
 # Matrix
 
-Right now `/target/{target_id}/check` is calling Matrix post installation script
+Right now `/target/{target_id}/check` is calling Matrix post installation script, it creates an admin user with login `dcomms-admin` and password `test`
 
 # TODO
 
