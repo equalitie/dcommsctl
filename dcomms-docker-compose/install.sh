@@ -1,5 +1,4 @@
 #!/bin/bash
-
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -235,30 +234,30 @@ main() {
     else
       for CHOICE in $CHOICES; do
         case "$CHOICE" in
-        "1")
+        "matrix")
             D_IMAGES+=("vectorim/element-web:v1.12.1" "matrixdotorg/synapse:$SYN_V")
             COMPOSE_FILES+="-f ./conf/compose/element.docker-compose.yml -f ./conf/compose/synapse.docker-compose.yml "
             MATRIX=true
             DNS_RECORD="${DNS_RECORD}Chat $(dig +short "chat.$DWEB_DOMAIN")\n"
             DNS_RECORD="${DNS_RECORD}Matrix $(dig +short "matrix.$DWEB_DOMAIN")\n"
           ;;
-        "2")
+        "ceno")
             D_IMAGES+=("equalitie/ceno-client:v0.21.2")
             COMPOSE_FILES+="-f ./conf/compose/bridge.docker-compose.yml "
             CENO=true
           ;;
-        "3")
+        "mau")
             D_IMAGES+=("dock.mau.dev/maubot/maubot:v0.3.1")
             COMPOSE_FILES+="-f ./conf/compose/mau.docker-compose.yml "
             MAU=true
           ;;
-        "4")
+        "mastodon")
             D_IMAGES+=("tootsuite/mastodon:$MAS_V" "redis:7.0-alpine" "postgres:14-alpine")
             COMPOSE_FILES+="-f ./conf/compose/mastodon.docker-compose.yml "
             MASTO=true
             DNS_RECORD="${DNS_RECORD}Mastodon $(dig +short "social.$DWEB_DOMAIN")\n"
           ;;
-	"5")
+        "peertube")
             COMPOSE_FILES+="-f ./conf/compose/peertube.docker-compose.yml "
             PEERTUBE=true
             DNS_RECORD="${DNS_RECORD}Peertube $(dig +short "peertube.$DWEB_DOMAIN")\n"

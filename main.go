@@ -3,9 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
-	_ "embed"
 	"encoding/csv"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -27,21 +25,9 @@ import (
 	"golang.org/x/crypto/ssh/agent"
 )
 
-// NOTE(max): this is currently the main implementation file
-//   everything here is considered important for implementation
-//   everything else that I worked on as ideas that are not used right now moved to other go files around
-//   some of these files are compiled into the app some don't
-
 // some concepts:
 //  - target (deployment target) is either VPS or cloud service
 //  - service is either docker compose unit or docker swarm service
-
-var (
-	//go:embed debian_setup.sh
-	installScriptContents []byte
-	//go:embed debian_check.sh
-	checkOsScriptContents []byte
-)
 
 type NetworkRequest struct {
 	Name     string
@@ -49,21 +35,18 @@ type NetworkRequest struct {
 }
 
 type SystemConfig struct {
-	Peertube bool
 	Services map[string]ServiceConfig
 }
 
-type ServiceConfigFile struct {
-	Name string
-	Path string
-}
-
 type ServiceConfig struct {
-	Name        string
-	Started     bool
-	ComposePath string
-	ConfigFiles []ServiceConfigFile
-	ContainerID string
+	Name              string
+	Started           bool
+	ComposePath       string
+	BackupScriptPath  string
+	RestoreScriptPath string
+	// TODO: ideally this is the set of files but right know I don't know how to propely handle those
+	ConfigFilePath string
+	ContainerID    string
 }
 
 type MatrixConfigData struct {
@@ -80,7 +63,10 @@ const (
 
 // This is a deployment target info, either cloud or VPS, for now only VPS
 type DeploymentTargetInfo struct {
-	ID     int
+	ID                   int
+	Remote               bool
+	SSHTunnelEstablished bool
+
 	User   string
 	Host   string
 	Port   string
@@ -88,13 +74,12 @@ type DeploymentTargetInfo struct {
 	// folder where we store the dcomms repo
 	ProjectRoot      string
 	ContainerBackend ContainerBackendType
-	MastodonEnabled  bool
-	MatrixEnabled    bool
-	CenoEnabled      bool
-	PeertubeEnabled  bool
-	MauEnabled       bool
-
-	SSHTunnelEstablished bool
+	// do not want to deal with map
+	MatrixEnabled   bool
+	MauEnabled      bool
+	PeertubeEnabled bool
+	MastodonEnabled bool
+	CenoEnabled     bool
 }
 
 type Application struct {
@@ -134,7 +119,6 @@ func sftpCopy(client *sftp.Client, srcPath, dstPath string) error {
 func targetsSave(app Application) error {
 	// FIXME: since we're using JSON anyway, this should be saved to json
 	f, err := os.Create("./targets.csv")
-
 	if err != nil {
 		return err
 	}
@@ -150,20 +134,15 @@ func targetsSave(app Application) error {
 		}
 
 		services := []string{}
+
 		if t.MatrixEnabled {
 			services = append(services, "matrix")
 		}
-		if t.CenoEnabled {
-			services = append(services, "ceno")
-		}
-		if t.MauEnabled {
-			services = append(services, "mau")
+		if t.PeertubeEnabled {
+			services = append(services, "peertube")
 		}
 		if t.MastodonEnabled {
 			services = append(services, "mastodon")
-		}
-		if t.PeertubeEnabled {
-			services = append(services, "peertube")
 		}
 
 		if len(services) == 0 {
@@ -183,7 +162,6 @@ func targetsSave(app Application) error {
 func targetsLoad(app Application) error {
 	// FIXME: since we're using JSON anyway, this should be loaded from json
 	f, err := os.Open("./targets.csv")
-
 	if err != nil {
 		return err
 	}
@@ -195,7 +173,6 @@ func targetsLoad(app Application) error {
 
 	for _, rec := range recs {
 		id, err := strconv.Atoi(rec[0])
-
 		if err != nil {
 			fmt.Println("Error while parsing error in targets.csv", err)
 			continue
@@ -227,22 +204,16 @@ func targetsLoad(app Application) error {
 			User:             user,
 			Domain:           domain,
 			ContainerBackend: containerBackend,
+			Remote:           false,
 		}
 
 		for _, srv := range srvsSplit {
-			if srv == "matrix" {
+			switch srv {
+			case "matrix":
 				t.MatrixEnabled = true
-			}
-			if srv == "ceno" {
-				t.CenoEnabled = true
-			}
-			if srv == "mau" {
-				t.MauEnabled = true
-			}
-			if srv == "mastodon" {
+			case "mastodon":
 				t.MastodonEnabled = true
-			}
-			if srv == "peertube" {
+			case "peertube":
 				t.PeertubeEnabled = true
 			}
 		}
@@ -332,7 +303,6 @@ func sshTunnel(ctx context.Context, t DeploymentTargetInfo, localAddr string) er
 	socket := os.Getenv("SSH_AUTH_SOCK")
 
 	conn, err := net.Dial("unix", socket)
-
 	if err != nil {
 		return fmt.Errorf("Unable to connect to ssh-agent socket: %s", err)
 	}
@@ -349,14 +319,12 @@ func sshTunnel(ctx context.Context, t DeploymentTargetInfo, localAddr string) er
 	}
 
 	remoteSSHClient, err := ssh.Dial("tcp", t.Host+":"+t.Port, config)
-
 	if err != nil {
 		return fmt.Errorf("Unable to dial ssh: %v", err)
 	}
 	// FIXME: when are we closing this?
 	// defer remoteSSHClient.Close()
 	listener, err := net.Listen("tcp", localAddr)
-
 	if err != nil {
 		return fmt.Errorf("Failed to listen on local address: %s", err)
 	}
@@ -381,14 +349,12 @@ func sshTunnel(ctx context.Context, t DeploymentTargetInfo, localAddr string) er
 
 		for {
 			localConn, err := listener.Accept()
-
 			if err != nil {
 				log.Printf("Failed to accept local connection: %s", err)
 				continue
 			}
 
 			remoteConn, err := remoteSSHClient.Dial("unix", "/var/run/docker.sock")
-
 			if err != nil {
 				log.Printf("Failed to dial remote Docker socket: %s", err)
 				localConn.Close()
@@ -411,19 +377,29 @@ func sshTunnel(ctx context.Context, t DeploymentTargetInfo, localAddr string) er
 		}
 	}()
 
-	if err := sshExecCommand(t, `docker ps -a --format "table {{.Names}}\t{{.Status}}"`); err != nil {
+	if err := sshExecCommand(ctx, t, `docker ps -a --format "table {{.Names}}\t{{.Status}}"`); err != nil {
 		return fmt.Errorf("Failed to get data on compose containers: %s", err)
 	}
 
 	return nil
 }
 
+func execCommand(ctx context.Context, t DeploymentTargetInfo, cmd string) error {
+	c := exec.Command(cmd)
+
+	_, err := c.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error executing command: %s", err)
+	}
+
+	return nil
+}
+
 // FIXME: we need to get result out, either write to a buffer or something
-func sshExecCommand(t DeploymentTargetInfo, cmd string) error {
+func sshExecCommand(ctx context.Context, t DeploymentTargetInfo, cmd string) error {
 	socket := os.Getenv("SSH_AUTH_SOCK")
 
 	conn, err := net.Dial("unix", socket)
-
 	if err != nil {
 		return fmt.Errorf("unable to connect to ssh-agent socket: %v", err)
 	}
@@ -440,7 +416,6 @@ func sshExecCommand(t DeploymentTargetInfo, cmd string) error {
 	}
 
 	client, err := ssh.Dial("tcp", t.Host+":"+t.Port, config)
-
 	if err != nil {
 		return fmt.Errorf("unable to dial ssh: %v", err)
 	}
@@ -476,7 +451,7 @@ func remoteOsStatus(target DeploymentTargetInfo) []byte {
 	}
 
 	for _, cmd := range commands {
-		if err := sshExecCommand(target, cmd); err != nil {
+		if err := sshExecCommand(context.TODO(), target, cmd); err != nil {
 			return nil
 		}
 	}
@@ -484,7 +459,7 @@ func remoteOsStatus(target DeploymentTargetInfo) []byte {
 	return buf.Bytes()
 }
 
-func getEnv(app Application, target DeploymentTargetInfo, serviceID string) ([]byte, error) {
+func getEnv(app Application, t DeploymentTargetInfo, serviceID string) ([]byte, error) {
 	serviceCfg, found := app.systemCfg.Services[serviceID]
 
 	if !found {
@@ -493,10 +468,16 @@ func getEnv(app Application, target DeploymentTargetInfo, serviceID string) ([]b
 	var stdoutBuf bytes.Buffer
 	var out bytes.Buffer
 
-	err := sshExecCommand(target, fmt.Sprintf("podman-compose -f config %s --services", serviceCfg.ComposePath))
+	cmd := fmt.Sprintf("podman-compose -f config %s --services", serviceCfg.ComposePath)
 
-	if err != nil {
-		return nil, err
+	if t.Remote {
+		if err := sshExecCommand(app.ctx, t, cmd); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := execCommand(app.ctx, t, cmd); err != nil {
+			return nil, err
+		}
 	}
 
 	services := bytes.SplitSeq(stdoutBuf.Bytes(), []byte("\n"))
@@ -506,11 +487,17 @@ func getEnv(app Application, target DeploymentTargetInfo, serviceID string) ([]b
 		if name == "" {
 			continue
 		}
-		// TODO: write this to `out`
-		cmd := fmt.Sprintf("podman-compose -d -f %s exec %s", path.Join("/home", target.User, "dcomms", "setup", "conf", "compose", serviceCfg.ComposePath), "env")
 
-		if err := sshExecCommand(target, cmd); err != nil {
-			return nil, err
+		cmd := fmt.Sprintf("podman-compose -d -f %s exec %s", path.Join("/home", t.User, "dcomms", "setup", "conf", "compose", serviceCfg.ComposePath), "env")
+
+		if t.Remote {
+			if err := sshExecCommand(app.ctx, t, cmd); err != nil {
+				return nil, err
+			}
+		} else {
+			if err := execCommand(app.ctx, t, cmd); err != nil {
+				return nil, err
+			}
 		}
 
 		out.WriteString(name)
@@ -522,7 +509,6 @@ func getEnv(app Application, target DeploymentTargetInfo, serviceID string) ([]b
 
 func getTargetFromRequest(app Application, r *http.Request) (DeploymentTargetInfo, error) {
 	target, err := strconv.Atoi(r.PathValue("target"))
-
 	if err != nil {
 		return DeploymentTargetInfo{}, fmt.Errorf("Failed to parse target id: %s", err)
 	}
@@ -536,302 +522,14 @@ func getTargetFromRequest(app Application, r *http.Request) (DeploymentTargetInf
 	return t, nil
 }
 
-func httpGetInfo(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
-	t, err := getTargetFromRequest(app, r)
+func getServiceFromRequest(app Application, r *http.Request) (ServiceConfig, error) {
+	serviceID := r.PathValue("service")
 
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
+	if s, found := app.systemCfg.Services[serviceID]; found {
+		return s, nil
+	} else {
+		return ServiceConfig{}, fmt.Errorf("Service not found: %s", serviceID)
 	}
-
-	w.Write(remoteOsStatus(t))
-}
-
-func httpPostPanic(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
-	_, err := getTargetFromRequest(app, r)
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
-	}
-
-	// TODO: remove all volumes
-}
-
-func httPostTestInstallation(app Application, w http.ResponseWriter, r *http.Request) {
-	// TODO: implement a check script to see if we're ready to install Dcomms on deployment target
-}
-
-func httpGetTargets(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
-	out, err := json.Marshal(app.targets)
-	if err != nil {
-		fmt.Println("Failed to marshal targets into json:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.Write(out)
-}
-
-func httpPostTargetCreate(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
-	maxId := 0
-
-	// for now we just pick the biggest ID
-	for id := range app.targets {
-		if id > maxId {
-			maxId = id
-		}
-	}
-
-	backend := r.FormValue("backend")
-	containerBackend := ContainerBackendType(ContainerBackendDocker)
-
-	if backend == "podman" {
-		containerBackend = ContainerBackendPodman
-	}
-
-	// FIXME: properly process form values
-	t := DeploymentTargetInfo{
-		ID:               maxId + 1,
-		Host:             r.FormValue("host"),
-		User:             r.FormValue("username"),
-		Port:             r.FormValue("port"),
-		Domain:           r.FormValue("domainname"),
-		MatrixEnabled:    r.FormValue("matrix_on") == "on",
-		MauEnabled:       r.FormValue("mau_on") == "on",
-		CenoEnabled:      r.FormValue("ceno_on") == "on",
-		PeertubeEnabled:  r.FormValue("peertube_on") == "on",
-		MastodonEnabled:  r.FormValue("mastodon_on") == "on",
-		ContainerBackend: containerBackend,
-	}
-
-	if t.MauEnabled && !t.MatrixEnabled {
-		t.MauEnabled = false
-	}
-
-	app.targets[maxId+1] = t
-
-	targetsSave(app)
-
-	fmt.Println("Target created. ID:", maxId+1)
-
-	out, err := json.Marshal(t)
-
-	if err != nil {
-		fmt.Println("Failed to marshal target into json:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.Write(out)
-}
-
-func httpPostTargetUpdate(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
-	t, err := getTargetFromRequest(app, r)
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
-	}
-
-	// FIXME: properly process form values
-	app.targets[t.ID] = DeploymentTargetInfo{
-		Host:            r.FormValue("host"),
-		User:            r.FormValue("username"),
-		Port:            r.FormValue("port"),
-		Domain:          r.FormValue("domainname"),
-		MatrixEnabled:   r.FormValue("matrix_on") == "on",
-		MauEnabled:      r.FormValue("mau_on") == "on",
-		CenoEnabled:     r.FormValue("ceno_on") == "on",
-		PeertubeEnabled: r.FormValue("peertube_on") == "on",
-		MastodonEnabled: r.FormValue("mastodon_on") == "on",
-	}
-
-	targetsSave(app)
-
-	fmt.Println("Target updated. ID:", t.ID)
-}
-
-func httpPostRunStartupScript(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
-	t, err := getTargetFromRequest(app, r)
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
-	}
-
-	pathToDComms := "/home/" + t.User + "/dcomms/setup"
-	pathToDCommsRun := pathToDComms + "/run.sh"
-	pathToDCommsStop := pathToDComms + "/stop.sh"
-
-	// FIXME: we probably should not run this, but we do for now
-	_ = sshExecCommand(t, `cd `+pathToDComms+` && PATH=$PATH:~/.local/bin `+pathToDCommsStop)
-
-	err = sshExecCommand(t, `cd `+pathToDComms+` && PATH=$PATH:~/.local/bin `+pathToDCommsRun)
-	if err != nil {
-		fmt.Println("Failed to exec run.sh script:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-}
-
-func httpPostRunCheckScript(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
-	t, err := getTargetFromRequest(app, r)
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
-	}
-
-	ctx := r.Context()
-
-	// TODO: pick a new port for different target
-	cli, err := sshDockerSend(ctx, t, "localhost:3000")
-
-	if err != nil {
-		t.SSHTunnelEstablished = false
-		fmt.Println("Failed to tunnel to docker", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Tunnel failed: %s", err)
-		return
-	}
-
-	t.SSHTunnelEstablished = true
-
-	app.targets[t.ID] = t
-
-	if err := sshDockerInspectContainers(ctx, cli); err != nil {
-		fmt.Println("Failed to inspect docker containers", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Inspecting containers on target failed: %s", err)
-		return
-	}
-
-}
-
-func httpPostRunStopScript(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
-	t, err := getTargetFromRequest(app, r)
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
-	}
-
-	pathToDComms := "/home/" + t.User + "/dcomms/setup"
-	pathToDCommsStop := pathToDComms + "/stop.sh"
-
-	err = sshExecCommand(t, `cd `+pathToDComms+` && PATH=$PATH:~/.local/bin `+pathToDCommsStop)
-	if err != nil {
-		fmt.Println("Failed to exec stop.sh script:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-}
-
-func httpPostRunInstallScript(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
-	t, err := getTargetFromRequest(app, r)
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
-	}
-	choices := []string{}
-
-	if t.MatrixEnabled {
-		choices = append(choices, "1")
-	}
-	if t.CenoEnabled {
-		choices = append(choices, "2")
-	}
-	if t.MauEnabled {
-		choices = append(choices, "3")
-	}
-	if t.MastodonEnabled {
-		choices = append(choices, "4")
-	}
-	if t.PeertubeEnabled {
-		choices = append(choices, "5")
-	}
-
-	if len(choices) == 0 {
-		fmt.Println("Install ran without any services selected")
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("No services selected"))
-		return
-	}
-
-	cmd := exec.Command("ssh", "-o", "ControlMaster=no", "-o", "ControlPath=none", t.User+"@"+t.Host, "bash -c", string(installScriptContents))
-	// FIXME: we need a unified output buffer we're sending back to the client
-	// TODO: we need to also stream this, not wait for the whole output and probably leave some markers in output to check for progress
-	output, err := cmd.CombinedOutput()
-	fmt.Println("--- Running pre-req install script ---")
-
-	fmt.Println(string(output))
-	if err != nil {
-		fmt.Println(t.Host, t.User, t.Port)
-		fmt.Println("Error running ssh to a VPS", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	fmt.Println("--- End of pre-req install script  ---")
-
-	if err := sshCopyProject(t); err != nil {
-		fmt.Println("Failed to copy project files:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	pathToDComms := "/home/" + t.User + "/dcomms/setup"
-	pathToDCommsInstall := pathToDComms + "/install.sh"
-
-	if t.ContainerBackend == ContainerBackendPodman {
-		pathToDCommsInstall = pathToDComms + "/install_podman.sh"
-	}
-
-	// FIXME: temporary PATH setting
-	err = sshExecCommand(t, fmt.Sprintf(`cd %s && chmod +x %s && PATH=$PATH:~/.local/bin DWEB_DOMAIN=%s CHOICES="%s" %s`, pathToDComms, pathToDCommsInstall, t.Domain, strings.Join(choices, " "), pathToDCommsInstall))
-	if err != nil {
-		fmt.Println("Failed to exec install script:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-}
-
-func httpGetEnv(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
-	serviceID := r.PathValue("id")
-
-	t, err := getTargetFromRequest(app, r)
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
-	}
-
-	env, err := getEnv(app, t, serviceID)
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		log.Println("Get env variables problem", err)
-		return
-	}
-
-	w.Write(env)
 }
 
 func main() {
@@ -848,39 +546,28 @@ func main() {
 	app.systemCfg.Services = make(map[string]ServiceConfig)
 
 	app.systemCfg.Services["peertube"] = ServiceConfig{
-		Name:    "Peertube",
-		Started: false,
-		ConfigFiles: []ServiceConfigFile{
-			{
-				Name: "Environment vars",
-				Path: "./dcomms-docker-compose/conf/peertube/environment",
-			},
-		},
-		ComposePath: "peertube.docker-compose.yml",
+		Name:              "Peertube",
+		Started:           false,
+		ConfigFilePath:    "./conf/peertube/environment",
+		BackupScriptPath:  "./peertube_backup.sh",
+		RestoreScriptPath: "./peertube_restore.sh",
+		ComposePath:       "./conf/compose/peertube.docker-compose.yml",
 	}
 
 	app.systemCfg.Services["mastodon"] = ServiceConfig{
-		Name:    "Mastodon",
-		Started: false,
-		ConfigFiles: []ServiceConfigFile{
-			{
-				Name: "Environment vars",
-				Path: "./dcomms-docker-compose/conf/mastodon/env.production",
-			},
-		},
-		ComposePath: "mastodon.docker-compose.yml",
+		Name:              "Mastodon",
+		Started:           false,
+		ConfigFilePath:    "./conf/mastodon/env.production",
+		BackupScriptPath:  "./mastodon_backup.sh",
+		RestoreScriptPath: "./mastodon_restore.sh",
+		ComposePath:       "./conf/compose/mastodon.docker-compose.yml",
 	}
 
 	app.systemCfg.Services["synapse"] = ServiceConfig{
-		Name:    "Matrix Synapse",
-		Started: false,
-		ConfigFiles: []ServiceConfigFile{
-			{
-				Name: "Environment vars",
-				Path: "./dcomms-docker-compose/conf/synapse/livekit.yaml",
-			},
-		},
-		ComposePath: "synapse.docker-compose.yml",
+		Name:           "Matrix Synapse",
+		Started:        false,
+		ConfigFilePath: "./conf/synapse/livekit.yaml",
+		ComposePath:    "./conf/compose/synapse.docker-compose.yml",
 	}
 
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
@@ -895,6 +582,8 @@ func main() {
 	mux.HandleFunc("POST /target/{target}/update", httpPostTargetUpdate)
 	mux.HandleFunc("GET /target/{target}/env/{id}", httpGetEnv)
 	mux.HandleFunc("POST /target/{target}/install", httpPostRunInstallScript)
+	mux.HandleFunc("POST /target/{target}/service/add/{service}", httpPostAddService)
+	mux.HandleFunc("POST /target/{target}/backup/{service}", httpPostRunBackupScript)
 	mux.HandleFunc("POST /target/{target}/start", httpPostRunStartupScript)
 	mux.HandleFunc("POST /target/{target}/stop", httpPostRunStopScript)
 	mux.HandleFunc("POST /target/{target}/check", httpPostRunCheckScript)

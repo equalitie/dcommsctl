@@ -62,8 +62,10 @@ Right now `/target/{target_id}/check` is calling Matrix post installation script
 
 # TODO
 
-* make it possible to run commands on containers
-    * make SSH tunnel to call docker api on socket through SSH connection
-    * parse compose files to get service names and containers they run
+* parse compose files to get service names and containers they run
 
-* debug install_podman.sh (right now only CENO, parts of Peertube and Mastodon are succesfully installed, Matrix setup hangs when running podman-compose up) 
+
+# Toools to add
+
+
+* CreepPad
