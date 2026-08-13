@@ -4,6 +4,7 @@ go 1.26.4
 
 require (
 	github.com/compose-spec/compose-go/v2 v2.13.0
+	github.com/joho/godotenv v1.5.1
 	github.com/moby/moby/api v1.54.2
 	github.com/moby/moby/client v0.4.1
 	github.com/pkg/sftp v1.13.10

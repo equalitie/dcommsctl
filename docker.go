@@ -19,6 +19,8 @@ import (
 	dockerClient "github.com/moby/moby/client"
 
 	"github.com/compose-spec/compose-go/v2/cli"
+
+	"github.com/joho/godotenv"
 )
 
 func sshDockerInspectContainers(ctx context.Context, cli *dockerClient.Client) error {
@@ -168,38 +170,59 @@ func dockerCreateUpdateCompose(ctx context.Context, composeFilePath string) erro
 }
 
 func readEnv(envFile string) ([]string, error) {
-	return []string{}, nil
-}
-
-func scriptTarStream(
-	filename string,
-	contents []byte,
-) (io.Reader, error) {
-	var buffer bytes.Buffer
-	writer := tar.NewWriter(&buffer)
-
-	err := writer.WriteHeader(&tar.Header{
-		Name: filename,
-		Mode: 0o700,
-		Size: int64(len(contents)),
-	})
+	fileReader, err := os.Open(envFile)
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err := writer.Write(contents); err != nil {
+	env, err := godotenv.Parse(fileReader)
+	if err != nil {
 		return nil, err
 	}
 
-	if err := writer.Close(); err != nil {
-		return nil, err
+	res := []string{}
+
+	for key, val := range env {
+		res = append(res, fmt.Sprintf("%s=%s", key, val))
 	}
 
+	return res, nil
+}
+
+func scriptTarStream(
+	filenames []string,
+) (io.Reader, error) {
+	var buffer bytes.Buffer
+	writer := tar.NewWriter(&buffer)
+
+	defer writer.Close()
+
+	for _, filename := range filenames {
+		contents, err := os.ReadFile(filename)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := writer.WriteHeader(&tar.Header{
+			Name: filename,
+			Mode: 0o700,
+			Size: int64(len(contents)),
+		}); err != nil {
+			return nil, err
+		}
+
+		if _, err := writer.Write(contents); err != nil {
+			return nil, err
+		}
+
+		if err := writer.Close(); err != nil {
+			return nil, err
+		}
+	}
 	return bytes.NewReader(buffer.Bytes()), nil
 }
 
-func dockerRunBackupRestore(ctx context.Context, app Application, cli *dockerClient.Client, service *ServiceConfig, cmds []string, scriptName string, scriptContents []byte) error {
-	helperImage := "postgres:alpine"
+func dockerSpinAndRun(ctx context.Context, app Application, cli *dockerClient.Client, containerName string, helperImage string, cmds []string, scriptName string, scriptContents []byte) error {
 	env, err := readEnv(app.systemCfg.Services["peertube"].ConfigFilePath)
 	if err != nil {
 		return err
@@ -214,16 +237,8 @@ func dockerRunBackupRestore(ctx context.Context, app Application, cli *dockerCli
 		return fmt.Errorf("create backup dir: %s", err)
 	}
 
-	peertubeDbContainer := "postgresql:apline"
-
-	env = append(
-		env,
-		"BACKUP_DIR=",
-	)
-
 	created, err := cli.ContainerCreate(
 		ctx,
-
 		dockerClient.ContainerCreateOptions{
 			Config: &container.Config{
 				Image:        helperImage,
@@ -234,7 +249,7 @@ func dockerRunBackupRestore(ctx context.Context, app Application, cli *dockerCli
 				Tty:          false,
 			},
 			HostConfig: &container.HostConfig{
-				VolumesFrom: []string{peertubeDbContainer + ":ro"},
+				VolumesFrom: []string{containerName + ":ro"},
 
 				Mounts: []mount.Mount{
 					{
@@ -267,8 +282,9 @@ func dockerRunBackupRestore(ctx context.Context, app Application, cli *dockerCli
 		)
 	}()
 
-	// This is required by CopyToContainer
-	tarStream, err := scriptTarStream(scriptName, scriptContents)
+	// Tar is required by CopyToContainer
+	// FIXME: need to get proper way for helpers
+	tarStream, err := scriptTarStream([]string{scriptName, "helpers.sh"})
 	if err != nil {
 		return fmt.Errorf("turning script into tar stream: %s", err)
 	}

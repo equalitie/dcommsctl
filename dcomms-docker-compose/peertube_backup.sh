@@ -28,21 +28,6 @@ require_non_empty() {
   [ -n "$variable_value" ] || die "required environment variable is missing or empty: $variable_name"
 }
 
-# PostgreSQL connection settings are intentionally explicit. Do this before
-# creating directories, locks, or partial output so a configuration error has
-# no filesystem side effects.
-require_non_empty PEERTUBE_DB_HOST "${PEERTUBE_DB_HOST-}"
-require_non_empty PEERTUBE_DB_PORT "${PEERTUBE_DB_PORT-}"
-require_non_empty PEERTUBE_DB_NAME "${PEERTUBE_DB_NAME-}"
-require_non_empty PEERTUBE_DB_USER "${PEERTUBE_DB_USER-}"
-require_non_empty PEERTUBE_DB_PASSWORD "${PEERTUBE_DB_PASSWORD-}"
-
-case "$PEERTUBE_DB_PORT" in
-  *[!0-9]*) die "PEERTUBE_DB_PORT must be an integer from 1 to 65535" ;;
-esac
-[ "$PEERTUBE_DB_PORT" -ge 1 ] && [ "$PEERTUBE_DB_PORT" -le 65535 ] || \
-  die "PEERTUBE_DB_PORT must be an integer from 1 to 65535"
-
 BACKUP_ROOT=${BACKUP_ROOT:-/backups}
 STORAGE_DIR=${STORAGE_DIR:-/source/storage}
 CONFIG_DIR=${CONFIG_DIR:-/source/config}
@@ -53,11 +38,6 @@ case "$BACKUP_ID" in
     die "BACKUP_ID is invalid or reserved; use letters, digits, dot, underscore, and dash"
     ;;
 esac
-
-need_command pg_dump
-need_command tar
-need_command sha256sum
-need_command date
 
 require_readable_directory "$STORAGE_DIR"
 require_readable_directory "$CONFIG_DIR"
@@ -91,8 +71,6 @@ cleanup() {
 }
 
 trap cleanup 0
-trap 'exit 130' INT
-trap 'exit 143' TERM HUP
 
 if ! mkdir "$lock_dir" 2>/dev/null; then
   die "another backup appears to be running; remove stale lock only after checking: $lock_dir"
@@ -112,24 +90,6 @@ PGPASSWORD=$PEERTUBE_DB_PASSWORD pg_dump \
   --no-owner \
   --no-privileges \
   --file="$work_dir/database.dump"
-
-log "archiving PeerTube storage from $STORAGE_DIR"
-tar \
-  --create \
-  --gzip \
-  --numeric-owner \
-  --file="$work_dir/storage.tar.gz" \
-  --directory="$STORAGE_DIR" \
-  .
-
-log "archiving PeerTube configuration from $CONFIG_DIR"
-tar \
-  --create \
-  --gzip \
-  --numeric-owner \
-  --file="$work_dir/config.tar.gz" \
-  --directory="$CONFIG_DIR" \
-  .
 
 created_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 {

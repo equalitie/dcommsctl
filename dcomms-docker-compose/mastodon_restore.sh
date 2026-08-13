@@ -4,56 +4,6 @@ set -eu
 
 umask 077
 
-log() {
-  printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*" >&2
-}
-
-die() {
-  log "ERROR: $*"
-  exit 1
-}
-
-need_command() {
-  command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
-}
-
-require_boolean() {
-  case "$2" in
-    0|1) ;;
-    *) die "$1 must be 0 or 1" ;;
-  esac
-}
-
-require_non_empty() {
-  variable_name=$1
-  variable_value=$2
-  [ -n "$variable_value" ] || die "required environment variable is missing or empty: $variable_name"
-}
-
-require_set() {
-  variable_name=$1
-  variable_marker=$2
-  [ "$variable_marker" = x ] || die "required environment variable is not set: $variable_name"
-}
-
-require_port() {
-  variable_name=$1
-  variable_value=$2
-  case "$variable_value" in
-    *[!0-9]*) die "$variable_name must be an integer from 1 to 65535" ;;
-  esac
-  [ "$variable_value" -ge 1 ] && [ "$variable_value" -le 65535 ] || \
-    die "$variable_name must be an integer from 1 to 65535"
-}
-
-# Validate PostgreSQL before inspecting or mutating restore targets. No
-# alternative environment-variable names or libpq defaults are accepted.
-require_non_empty DB_HOST "${DB_HOST-}"
-require_non_empty DB_PORT "${DB_PORT-}"
-require_non_empty DB_NAME "${DB_NAME-}"
-require_non_empty DB_USER "${DB_USER-}"
-require_non_empty DB_PASSWORD "${DB_PASSWORD-}"
-require_port DB_PORT "$DB_PORT"
 
 manifest_value() {
   awk -F= -v wanted="$1" '$1 == wanted { sub(/^[^=]*=/, ""); print; exit }' "$backup_dir/manifest.txt"
@@ -120,23 +70,13 @@ extract_archive() {
   archive=$1
   target=$2
 
-  if [ "${RESTORE_PRESERVE_OWNERSHIP:-1}" = 1 ]; then
-    tar \
-      --extract \
-      --gzip \
-      --numeric-owner \
-      --preserve-permissions \
-      --file="$archive" \
-      --directory="$target"
-  else
-    tar \
-      --extract \
-      --gzip \
-      --no-same-owner \
-      --preserve-permissions \
-      --file="$archive" \
-      --directory="$target"
-  fi
+  tar \
+    --extract \
+    --gzip \
+    --numeric-owner \
+    --preserve-permissions \
+    --file="$archive" \
+    --directory="$target"
 }
 
 BACKUP_ROOT=${BACKUP_ROOT:-/backups}
@@ -146,13 +86,7 @@ REDIS_DATA_DIR=${REDIS_DATA_DIR:-/restore/redis}
 RESTORE_MEDIA=${RESTORE_MEDIA:-1}
 RESTORE_CONFIG=${RESTORE_CONFIG:-1}
 RESTORE_REDIS=${RESTORE_REDIS:-1}
-REQUIRE_MOUNTPOINTS=${REQUIRE_MOUNTPOINTS:-1}
 backup_selector=${1:-latest}
-
-require_boolean RESTORE_MEDIA "$RESTORE_MEDIA"
-require_boolean RESTORE_CONFIG "$RESTORE_CONFIG"
-require_boolean RESTORE_REDIS "$RESTORE_REDIS"
-require_boolean REQUIRE_MOUNTPOINTS "$REQUIRE_MOUNTPOINTS"
 
 if [ "$backup_selector" = latest ]; then
   [ -r "$BACKUP_ROOT/LATEST" ] || die "latest-backup pointer not found: $BACKUP_ROOT/LATEST"
@@ -169,16 +103,6 @@ esac
 
 backup_dir="$BACKUP_ROOT/$backup_id"
 [ -d "$backup_dir" ] || die "backup does not exist: $backup_dir"
-
-need_command awk
-need_command sha256sum
-need_command tar
-need_command pg_restore
-need_command date
-need_command readlink
-need_command find
-need_command tr
-need_command cat
 
 for required_file in database.dump env.production manifest.txt SHA256SUMS; do
   [ -f "$backup_dir/$required_file" ] || die "backup is missing $required_file"
@@ -207,14 +131,8 @@ log "verifying backup checksums"
 verify_checksum database.dump
 verify_checksum env.production
 verify_checksum manifest.txt
-
-if [ "$media_included" = 1 ]; then
-  verify_checksum media.tar.gz
-fi
-
-if [ "$redis_included" = 1 ]; then
-  verify_checksum redis.tar.gz
-fi
+verify_checksum media.tar.gz
+verify_checksum redis.tar.gz
 
 log "checking archive and database-dump structure"
 pg_restore --list "$backup_dir/database.dump" >/dev/null
@@ -262,43 +180,6 @@ if [ -n "$media_real" ] && [ -n "$redis_real" ]; then
 fi
 if [ -n "$config_real" ] && [ -n "$redis_real" ]; then
   paths_overlap "$config_real" "$redis_real" && die "configuration and Redis targets overlap"
-fi
-
-if [ "$REQUIRE_MOUNTPOINTS" = 1 ]; then
-  [ -r /proc/self/mountinfo ] || die "cannot verify restore mounts; set REQUIRE_MOUNTPOINTS=0 only if intentional"
-  [ -z "$media_real" ] || is_mountpoint "$media_real" || die "media target is not a distinct mount point: $media_real"
-  [ -z "$config_real" ] || is_mountpoint "$config_real" || die "configuration target is not a distinct mount point: $config_real"
-  [ -z "$redis_real" ] || is_mountpoint "$redis_real" || die "Redis target is not a distinct mount point: $redis_real"
-fi
-
-need_command psql
-
-if [ "${ALLOW_ACTIVE_DB_CONNECTIONS:-0}" != 1 ]; then
-  active_connections=$(PGPASSWORD=$DB_PASSWORD psql \
-    --host="$DB_HOST" \
-    --port="$DB_PORT" \
-    --username="$DB_USER" \
-    --dbname="$DB_NAME" \
-    --no-psqlrc \
-    --tuples-only \
-    --no-align \
-    --command="SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND backend_type = 'client backend' AND pid <> pg_backend_pid()" | tr -d '[:space:]')
-  case "$active_connections" in
-    ''|*[!0-9]*) die "could not determine active database connection count" ;;
-  esac
-  [ "$active_connections" -eq 0 ] || die "database has $active_connections other active connection(s); stop Mastodon or set ALLOW_ACTIVE_DB_CONNECTIONS=1"
-fi
-
-if [ -n "$redis_real" ] && [ "${ALLOW_RUNNING_REDIS:-0}" != 1 ]; then
-  need_command redis-cli
-  need_command grep
-  require_non_empty REDIS_HOST "${REDIS_HOST-}"
-  require_non_empty REDIS_PORT "${REDIS_PORT-}"
-  require_set REDIS_PASSWORD "${REDIS_PASSWORD+x}"
-  require_port REDIS_PORT "$REDIS_PORT"
-  if REDISCLI_AUTH=$REDIS_PASSWORD redis-cli --host "$REDIS_HOST" --port "$REDIS_PORT" PING 2>/dev/null | grep -q PONG; then
-    die "Redis is still running; stop it before restoring or set ALLOW_RUNNING_REDIS=1"
-  fi
 fi
 
 if [ -n "$media_real" ]; then

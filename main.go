@@ -38,12 +38,17 @@ type SystemConfig struct {
 	Services map[string]ServiceConfig
 }
 
+type BackupRestoreStep struct {
+	TmpContainerImage string
+	ScriptPath        string
+}
+
 type ServiceConfig struct {
-	Name              string
-	Started           bool
-	ComposePath       string
-	BackupScriptPath  string
-	RestoreScriptPath string
+	Name         string
+	Started      bool
+	ComposePath  string
+	BackupSteps  []BackupRestoreStep
+	RestoreSteps []BackupRestoreStep
 	// TODO: ideally this is the set of files but right know I don't know how to propely handle those
 	ConfigFilePath string
 	ContainerID    string
@@ -291,7 +296,7 @@ func sshCopyProject(target DeploymentTargetInfo) error {
 	}
 	defer sftpClient.Close()
 
-	if err := copyFolder(sftpClient, pathToDcomms, "/home/"+target.User+"/dcomms/setup"); err != nil {
+	if err := copyFolder(sftpClient, pathToDcomms, "/home/"+target.User+"/dcomms/dcomms-docker-compose"); err != nil {
 		return fmt.Errorf("Fail to copy files: %s", err)
 	}
 
@@ -546,21 +551,75 @@ func main() {
 	app.systemCfg.Services = make(map[string]ServiceConfig)
 
 	app.systemCfg.Services["peertube"] = ServiceConfig{
-		Name:              "Peertube",
-		Started:           false,
-		ConfigFilePath:    "./conf/peertube/environment",
-		BackupScriptPath:  "./peertube_backup.sh",
-		RestoreScriptPath: "./peertube_restore.sh",
-		ComposePath:       "./conf/compose/peertube.docker-compose.yml",
+		Name:           "Peertube",
+		Started:        false,
+		ConfigFilePath: "./conf/peertube/environment",
+		// FIXME: get proper container names from compose files
+		BackupSteps: []BackupRestoreStep{
+			{
+				TmpContainerImage: "postgres:13-alpine",
+				ScriptPath:        "./peertube_backup_postgres.sh",
+			},
+			// FIXME: we do not need containers for the last two
+			{
+				TmpContainerImage: "alpine:3.23",
+				ScriptPath:        "./peertube_backup_media.sh",
+			},
+			{
+				TmpContainerImage: "alpine:3.23",
+				ScriptPath:        "./peertube_backup_final.sh",
+			},
+		},
+		RestoreSteps: []BackupRestoreStep{
+			{
+				TmpContainerImage: "postgres:13-alpine",
+				ScriptPath:        "./peertube_restore_postgres.sh",
+			},
+			{
+				TmpContainerImage: "alpine:3.23",
+				ScriptPath:        "./peertube_restore_media.sh",
+			},
+		},
+		ComposePath: "./conf/compose/peertube.docker-compose.yml",
 	}
 
 	app.systemCfg.Services["mastodon"] = ServiceConfig{
-		Name:              "Mastodon",
-		Started:           false,
-		ConfigFilePath:    "./conf/mastodon/env.production",
-		BackupScriptPath:  "./mastodon_backup.sh",
-		RestoreScriptPath: "./mastodon_restore.sh",
-		ComposePath:       "./conf/compose/mastodon.docker-compose.yml",
+		Name:           "Mastodon",
+		Started:        false,
+		ConfigFilePath: "./conf/mastodon/env.production",
+		BackupSteps: []BackupRestoreStep{
+			{
+				TmpContainerImage: "postgres:14.13-alpine",
+				ScriptPath:        "./mastodon_backup_postgres.sh",
+			},
+			{
+				TmpContainerImage: "redis:7.0-alpine",
+				ScriptPath:        "./mastodon_backup_redis.sh",
+			},
+			{
+				TmpContainerImage: "alpine:3.23",
+				ScriptPath:        "./mastodon_backup_media.sh",
+			},
+			{
+				TmpContainerImage: "alpine:3.23",
+				ScriptPath:        "./mastodon_backup_final.sh",
+			},
+		},
+		RestoreSteps: []BackupRestoreStep{
+			{
+				TmpContainerImage: "postgres:14.13-alpine",
+				ScriptPath:        "./mastodon_restore_postgres.sh",
+			},
+			{
+				TmpContainerImage: "redis:7.0-alpine",
+				ScriptPath:        "./mastodon_restore_redis.sh",
+			},
+			{
+				TmpContainerImage: "alpine:3.23",
+				ScriptPath:        "./mastodon_restore_media.sh",
+			},
+		},
+		ComposePath: "./conf/compose/mastodon.docker-compose.yml",
 	}
 
 	app.systemCfg.Services["synapse"] = ServiceConfig{
@@ -584,6 +643,7 @@ func main() {
 	mux.HandleFunc("POST /target/{target}/install", httpPostRunInstallScript)
 	mux.HandleFunc("POST /target/{target}/service/add/{service}", httpPostAddService)
 	mux.HandleFunc("POST /target/{target}/backup/{service}", httpPostRunBackupScript)
+	mux.HandleFunc("POST /target/{target}/restore/{service}", httpPostRunRestoreScript)
 	mux.HandleFunc("POST /target/{target}/start", httpPostRunStartupScript)
 	mux.HandleFunc("POST /target/{target}/stop", httpPostRunStopScript)
 	mux.HandleFunc("POST /target/{target}/check", httpPostRunCheckScript)

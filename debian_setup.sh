@@ -53,11 +53,6 @@ else
     systemctl --user enable podman.socket
 fi
 
-DIR=/home/$USER/dcomms
-
-[ -d "$DIR" ] && sudo rm -rf $DIR
-mkdir -p $DIR
-
 sudo mkdir -p /var/www/dcomms
 
 sudo apt-get autoremove -y

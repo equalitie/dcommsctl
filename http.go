@@ -143,7 +143,7 @@ func httpPostRunStartupScript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pathToDComms := "/home/" + t.User + "/dcomms/setup"
+	pathToDComms := "/home/" + t.User + "/dcommsctl/dcomms-docker-compose"
 	pathToDCommsRun := pathToDComms + "/run.sh"
 	pathToDCommsStop := pathToDComms + "/stop.sh"
 
@@ -200,7 +200,7 @@ func httpPostRunStopScript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pathToDComms := "/home/" + t.User + "/dcomms/setup"
+	pathToDComms := "/home/" + t.User + "/dcommsctl/dcomms-docker-compose"
 	pathToDCommsStop := pathToDComms + "/stop.sh"
 
 	err = sshExecCommand(r.Context(), t, `cd `+pathToDComms+` && PATH=$PATH:~/.local/bin `+pathToDCommsStop)
@@ -235,22 +235,27 @@ func httpPostRunBackupScript(w http.ResponseWriter, r *http.Request) {
 	}
 	defer containerClient.Close()
 
-	scriptContents, err := os.ReadFile(service.BackupScriptPath)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if err := dockerRunBackupRestore(
-		ctx,
-		app,
-		containerClient,
-		&service,
-		[]string{},
-		service.BackupScriptPath,
-		scriptContents,
-	); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+	// TODO: cleanup
+	for _, script := range service.BackupSteps {
+		scriptContents, err := os.ReadFile(script.ScriptPath)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if err := dockerSpinAndRun(
+			ctx,
+			app,
+			containerClient,
+			"",
+			script.TmpContainerImage,
+			[]string{script.ScriptPath},
+			script.ScriptPath,
+			scriptContents,
+		); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
@@ -278,22 +283,27 @@ func httpPostRunRestoreScript(w http.ResponseWriter, r *http.Request) {
 	}
 	defer containerClient.Close()
 
-	scriptContents, err := os.ReadFile(service.RestoreScriptPath)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if err := dockerRunBackupRestore(
-		ctx,
-		app,
-		containerClient,
-		&service,
-		[]string{},
-		service.RestoreScriptPath,
-		scriptContents,
-	); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+	// TODO: cleanup
+	for _, script := range service.RestoreSteps {
+		scriptContents, err := os.ReadFile(script.ScriptPath)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if err := dockerSpinAndRun(
+			ctx,
+			app,
+			containerClient,
+			"",
+			script.TmpContainerImage,
+			[]string{script.ScriptPath},
+			script.ScriptPath,
+			scriptContents,
+		); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
