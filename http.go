@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 
 	dockerClient "github.com/moby/moby/client"
 )
@@ -134,30 +135,6 @@ func httpPostTargetUpdate(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
-func httpPostRunStartupScript(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
-	t, err := getTargetFromRequest(app, r)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
-	}
-
-	pathToDComms := "/home/" + t.User + "/dcommsctl/dcomms-docker-compose"
-	pathToDCommsRun := pathToDComms + "/run.sh"
-	pathToDCommsStop := pathToDComms + "/stop.sh"
-
-	// FIXME: we probably should not run this, but we do for now
-	_ = sshExecCommand(r.Context(), t, `cd `+pathToDComms+` && PATH=$PATH:~/.local/bin `+pathToDCommsStop)
-
-	err = sshExecCommand(r.Context(), t, `cd `+pathToDComms+` && PATH=$PATH:~/.local/bin `+pathToDCommsRun)
-	if err != nil {
-		fmt.Println("Failed to exec run.sh script:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-}
-
 func httpPostRunCheckScript(w http.ResponseWriter, r *http.Request) {
 	app := r.Context().Value("app").(Application)
 	t, err := getTargetFromRequest(app, r)
@@ -191,6 +168,39 @@ func httpPostRunCheckScript(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func httpPostRunStartupScript(w http.ResponseWriter, r *http.Request) {
+	app := r.Context().Value("app").(Application)
+	t, err := getTargetFromRequest(app, r)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	pathToDComms := "/home/" + t.User + "/dcommsctl/dcomms-docker-compose"
+	pathToDCommsRun := pathToDComms + "/run.sh"
+
+	if t.Remote {
+		err = sshExecCommand(r.Context(), t, `cd `+pathToDComms+` && PATH=$PATH:~/.local/bin `+pathToDCommsRun)
+		if err != nil {
+			fmt.Println("Failed to exec run.sh script:", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	} else {
+		cmd := exec.Command("bash", pathToDCommsRun)
+		cmd.Dir = pathToDComms
+
+		scriptOut, err := cmd.CombinedOutput()
+		fmt.Println(string(scriptOut))
+		if err != nil {
+			fmt.Println("Failed to exec run.sh script:", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+		}
+	}
+}
+
 func httpPostRunStopScript(w http.ResponseWriter, r *http.Request) {
 	app := r.Context().Value("app").(Application)
 	t, err := getTargetFromRequest(app, r)
@@ -203,11 +213,24 @@ func httpPostRunStopScript(w http.ResponseWriter, r *http.Request) {
 	pathToDComms := "/home/" + t.User + "/dcommsctl/dcomms-docker-compose"
 	pathToDCommsStop := pathToDComms + "/stop.sh"
 
-	err = sshExecCommand(r.Context(), t, `cd `+pathToDComms+` && PATH=$PATH:~/.local/bin `+pathToDCommsStop)
-	if err != nil {
-		fmt.Println("Failed to exec stop.sh script:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+	if t.Remote {
+		err = sshExecCommand(r.Context(), t, `cd `+pathToDComms+` && PATH=$PATH:~/.local/bin `+pathToDCommsStop)
+		if err != nil {
+			fmt.Println("Failed to exec run.sh script:", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	} else {
+		cmd := exec.Command("bash", pathToDCommsStop)
+		cmd.Dir = pathToDComms
+
+		scriptOut, err := cmd.CombinedOutput()
+		fmt.Println(string(scriptOut))
+		if err != nil {
+			fmt.Println("Failed to exec run.sh script:", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+		}
 	}
 }
 
