@@ -82,7 +82,6 @@ func scriptInstall(ctx context.Context, t DeploymentTargetInfo) error {
 
 	pathToDComms := "/home/" + t.User + "/dcommsctl/dcomms-docker-compose"
 	pathToDCommsInstall := pathToDComms + "/install.sh"
-	installCmd := fmt.Sprintf(`cd %s && chmod +x %s && PATH=$PATH:~/.local/bin DWEB_DOMAIN=%s CHOICES="%s" %s`, pathToDComms, pathToDCommsInstall, t.Domain, strings.Join(choices, " "), pathToDCommsInstall)
 
 	if t.Remote {
 		if err := sshCopyProject(t); err != nil {
@@ -102,25 +101,37 @@ func scriptInstall(ctx context.Context, t DeploymentTargetInfo) error {
 			pathToDCommsInstall = pathToDComms + "/install_podman.sh"
 		}
 
+		installCmd := fmt.Sprintf(`cd %s && DWEB_DOMAIN=%s CHOICES="%s" bash %s`, pathToDComms, t.Domain, strings.Join(choices, " "), pathToDCommsInstall)
 		if err := sshExecCommand(ctx, t, installCmd); err != nil {
-			return fmt.Errorf("Failed to exec install script: %s", err)
+			return fmt.Errorf("install script: %s", err)
 		}
 	} else {
-		cmd := exec.Command("./debian_setup.sh")
-		output, err := cmd.CombinedOutput()
+		preinstallCmd := exec.Command("bash", "./debian_setup.sh")
+		output, err := preinstallCmd.CombinedOutput()
 		fmt.Println("--- Running pre-req install script ---")
 
 		// FIXME: we need a unified output buffer we're sending back to the client
 		// TODO: we need to also stream this, not wait for the whole output and probably leave some markers in output to check for progress
 		fmt.Println(string(output))
 		if err != nil {
-			return fmt.Errorf("pre req install script script %s", err)
+			return fmt.Errorf("pre-req install script %s", err)
 		}
 		fmt.Println("--- End of pre-req install script  ---")
 
-		if err := execCommand(ctx, t, installCmd); err != nil {
-			return fmt.Errorf("Failed to exec install script: %s", err)
+		installCmd := exec.Command("bash", pathToDCommsInstall)
+
+		installCmd.Env = []string{
+			"CHOICES=" + strings.Join(choices, " "),
+			"DWEB_DOMAIN=" + t.Domain,
 		}
+		installCmd.Dir = pathToDComms
+
+		installOutput, err := installCmd.CombinedOutput()
+		fmt.Println(string(installOutput))
+		if err != nil {
+			return fmt.Errorf("install script %s", err)
+		}
+
 	}
 
 	return nil
