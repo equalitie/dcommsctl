@@ -48,12 +48,12 @@ require_port() {
 
 # Validate PostgreSQL before inspecting or mutating restore targets. No
 # alternative environment-variable names or libpq defaults are accepted.
-require_non_empty MASTODON_DB_HOST "${MASTODON_DB_HOST-}"
-require_non_empty MASTODON_DB_PORT "${MASTODON_DB_PORT-}"
-require_non_empty MASTODON_DB_NAME "${MASTODON_DB_NAME-}"
-require_non_empty MASTODON_DB_USER "${MASTODON_DB_USER-}"
-require_non_empty MASTODON_DB_PASSWORD "${MASTODON_DB_PASSWORD-}"
-require_port MASTODON_DB_PORT "$MASTODON_DB_PORT"
+require_non_empty DB_HOST "${DB_HOST-}"
+require_non_empty DB_PORT "${DB_PORT-}"
+require_non_empty DB_NAME "${DB_NAME-}"
+require_non_empty DB_USER "${DB_USER-}"
+require_non_empty DB_PASSWORD "${DB_PASSWORD-}"
+require_port DB_PORT "$DB_PORT"
 
 manifest_value() {
   awk -F= -v wanted="$1" '$1 == wanted { sub(/^[^=]*=/, ""); print; exit }' "$backup_dir/manifest.txt"
@@ -274,11 +274,11 @@ fi
 need_command psql
 
 if [ "${ALLOW_ACTIVE_DB_CONNECTIONS:-0}" != 1 ]; then
-  active_connections=$(PGPASSWORD=$MASTODON_DB_PASSWORD psql \
-    --host="$MASTODON_DB_HOST" \
-    --port="$MASTODON_DB_PORT" \
-    --username="$MASTODON_DB_USER" \
-    --dbname="$MASTODON_DB_NAME" \
+  active_connections=$(PGPASSWORD=$DB_PASSWORD psql \
+    --host="$DB_HOST" \
+    --port="$DB_PORT" \
+    --username="$DB_USER" \
+    --dbname="$DB_NAME" \
     --no-psqlrc \
     --tuples-only \
     --no-align \
@@ -292,11 +292,11 @@ fi
 if [ -n "$redis_real" ] && [ "${ALLOW_RUNNING_REDIS:-0}" != 1 ]; then
   need_command redis-cli
   need_command grep
-  require_non_empty MASTODON_REDIS_HOST "${MASTODON_REDIS_HOST-}"
-  require_non_empty MASTODON_REDIS_PORT "${MASTODON_REDIS_PORT-}"
-  require_set MASTODON_REDIS_PASSWORD "${MASTODON_REDIS_PASSWORD+x}"
-  require_port MASTODON_REDIS_PORT "$MASTODON_REDIS_PORT"
-  if REDISCLI_AUTH=$MASTODON_REDIS_PASSWORD redis-cli --host "$MASTODON_REDIS_HOST" --port "$MASTODON_REDIS_PORT" PING 2>/dev/null | grep -q PONG; then
+  require_non_empty REDIS_HOST "${REDIS_HOST-}"
+  require_non_empty REDIS_PORT "${REDIS_PORT-}"
+  require_set REDIS_PASSWORD "${REDIS_PASSWORD+x}"
+  require_port REDIS_PORT "$REDIS_PORT"
+  if REDISCLI_AUTH=$REDIS_PASSWORD redis-cli --host "$REDIS_HOST" --port "$REDIS_PORT" PING 2>/dev/null | grep -q PONG; then
     die "Redis is still running; stop it before restoring or set ALLOW_RUNNING_REDIS=1"
   fi
 fi
@@ -318,11 +318,11 @@ if [ -n "$redis_real" ]; then
   extract_archive "$backup_dir/redis.tar.gz" "$redis_real"
 fi
 
-log "restoring PostgreSQL database '$MASTODON_DB_NAME' on $MASTODON_DB_HOST:$MASTODON_DB_PORT"
-PGPASSWORD=$MASTODON_DB_PASSWORD pg_restore \
-  --host="$MASTODON_DB_HOST" \
-  --port="$MASTODON_DB_PORT" \
-  --username="$MASTODON_DB_USER" \
+log "restoring PostgreSQL database '$DB_NAME' on $DB_HOST:$DB_PORT"
+PGPASSWORD=$DB_PASSWORD pg_restore \
+  --host="$DB_HOST" \
+  --port="$DB_PORT" \
+  --username="$DB_USER" \
   --clean \
   --if-exists \
   --exit-on-error \
@@ -330,7 +330,7 @@ PGPASSWORD=$MASTODON_DB_PASSWORD pg_restore \
   --no-privileges \
   --single-transaction \
   --schema=public \
-  --dbname="$MASTODON_DB_NAME" \
+  --dbname="$DB_NAME" \
   "$backup_dir/database.dump"
 
 log "restore completed from: $backup_dir"

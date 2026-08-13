@@ -91,10 +91,10 @@ if [ "$INCLUDE_MEDIA" = 1 ]; then
 fi
 
 if [ "$INCLUDE_REDIS" = 1 ]; then
-  require_non_empty MASTODON_REDIS_HOST "${MASTODON_REDIS_HOST-}"
-  require_non_empty MASTODON_REDIS_PORT "${MASTODON_REDIS_PORT-}"
-  require_set MASTODON_REDIS_PASSWORD "${MASTODON_REDIS_PASSWORD+x}"
-  require_port MASTODON_REDIS_PORT "$MASTODON_REDIS_PORT"
+  require_non_empty REDIS_HOST "${REDIS_HOST-}"
+  require_non_empty REDIS_PORT "${REDIS_PORT-}"
+  require_set REDIS_PASSWORD "${REDIS_PASSWORD+x}"
+  require_port REDIS_PORT "$REDIS_PORT"
   need_command redis-cli
   require_readable_directory "$REDIS_DATA_DIR"
 fi
@@ -165,10 +165,10 @@ if [ "$INCLUDE_MEDIA" = 1 ]; then
 fi
 
 if [ "$INCLUDE_REDIS" = 1 ]; then
-  log "requesting a synchronous Redis snapshot from $MASTODON_REDIS_HOST:$MASTODON_REDIS_PORT"
-  REDISCLI_AUTH=$MASTODON_REDIS_PASSWORD redis-cli \
-    --host "$MASTODON_REDIS_HOST" \
-    --port "$MASTODON_REDIS_PORT" \
+  log "requesting a synchronous Redis snapshot from $REDIS_HOST:$REDIS_PORT"
+  REDISCLI_AUTH=$REDIS_PASSWORD redis-cli \
+    --host "$REDIS_HOST" \
+    --port "$REDIS_PORT" \
     SAVE >/dev/null
 
   log "archiving Redis persisted data from $REDIS_DATA_DIR"
