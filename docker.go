@@ -126,7 +126,7 @@ func dockerRun(ctx context.Context, cli *dockerClient.Client, ctrID string, cmd 
 }
 
 func dockerCreateUpdateCompose(ctx context.Context, composeFilePath string) error {
-	projectName := "mastodon"
+	projectName := "mastodon-update"
 
 	options, err := cli.NewProjectOptions(
 		[]string{composeFilePath},
@@ -204,8 +204,34 @@ func scriptTarStream(filenames []string) (io.Reader, error) {
 	return bytes.NewReader(buffer.Bytes()), nil
 }
 
-func dockerSpinAndRun(ctx context.Context, app Application, cli *dockerClient.Client, containerName string, helperImage string, cmds []string, scriptName string, scriptContents []byte) error {
-	env, err := readEnv(app.systemCfg.Services["peertube"].ConfigFilePath)
+func dockerFindContainerByProjectAndService(ctx context.Context, cli *dockerClient.Client, projectName, serviceName string) (dockerClient.ContainerListResult, error) {
+	result, err := cli.ContainerList(ctx, dockerClient.ContainerListOptions{
+		Filters: dockerClient.Filters{
+			"label": {
+				"com.docker.compose.project=" + projectName: true,
+				"com.docker.compose.service=" + serviceName: true,
+			},
+		},
+		All: true,
+	})
+	if err != nil {
+		return dockerClient.ContainerListResult{}, fmt.Errorf("find docker container: %s", err)
+	}
+
+	return result, nil
+}
+
+func dockerSpinAndRun(
+	ctx context.Context,
+	app *GlobalState,
+	cli *dockerClient.Client,
+	containerID string,
+	helperImage string,
+	cmds []string,
+	scriptName string,
+) error {
+	backupID := "tmpID"
+	env, err := readEnv(app.systemCfg.Applications["peertube"].ConfigFilePath)
 	if err != nil {
 		return err
 	}
@@ -219,6 +245,12 @@ func dockerSpinAndRun(ctx context.Context, app Application, cli *dockerClient.Cl
 		return fmt.Errorf("create backup dir: %s", err)
 	}
 
+	env = append(
+		env,
+		"BACKUP_ROOT="+hostBackupDir,
+		"BACKUP_ID="+backupID,
+	)
+
 	created, err := cli.ContainerCreate(
 		ctx,
 		dockerClient.ContainerCreateOptions{
@@ -231,7 +263,7 @@ func dockerSpinAndRun(ctx context.Context, app Application, cli *dockerClient.Cl
 				Tty:          false,
 			},
 			HostConfig: &container.HostConfig{
-				VolumesFrom: []string{containerName + ":ro"},
+				VolumesFrom: []string{containerID + ":ro"},
 
 				Mounts: []mount.Mount{
 					{

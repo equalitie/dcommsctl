@@ -4,20 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	// "go.podman.io/podman/v6/pkg/bindings"
 	"github.com/compose-spec/compose-go/v2/cli"
 )
 
-// there are no official bindings to work with podman-compose from go, but we can manually parse the compose format
-// there might be diffuculties merge multiple docker-compose files but at least we can
-
-func compose(path string) error {
-	ctx := context.Background()
+func compose(ctx context.Context, composeFilePath string) error {
 	opt, err := cli.NewProjectOptions(
-		[]string{path},
+		[]string{composeFilePath},
 		cli.WithOsEnv,
 		cli.WithDotEnv,
-		cli.WithName("proj"),
 	)
 	if err != nil {
 		return fmt.Errorf("Composer parser options err: %s", err)
@@ -33,20 +27,11 @@ func compose(path string) error {
 		return nil
 	}
 
-	fmt.Println("Printing services from a compose file", path)
+	fmt.Println("Printing services from a compose file", composeFilePath)
 
 	for _, s := range srvs {
 		fmt.Println(s.Name, s.ContainerName)
 	}
 
 	return nil
-}
-
-func testAllServices(app GlobalState) {
-	// FIXME: that's for local paths right now, we need to work on actually reading it from the OS, not letting the module read it
-	for _, srv := range app.systemCfg.Applications {
-		if err := compose(srv.ComposePath); err != nil {
-			fmt.Println(err)
-		}
-	}
 }

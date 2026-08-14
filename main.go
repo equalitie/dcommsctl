@@ -35,11 +35,13 @@ type NetworkRequest struct {
 }
 
 type SystemConfig struct {
-	Applications map[string]ApplicationConfig
+	DcommsConfFilesDir string
+	Applications       map[string]ApplicationConfig
 }
 
 type BackupRestoreStep struct {
 	TmpContainerImage string
+	ServiceName       string
 	ScriptPath        string
 }
 
@@ -90,8 +92,8 @@ type GlobalState struct {
 	systemCfg SystemConfig
 }
 
-func NewGlobalState() GlobalState {
-	return GlobalState{
+func NewGlobalState() *GlobalState {
+	return &GlobalState{
 		targets: make(map[int]DeploymentTargetInfo),
 	}
 }
@@ -116,7 +118,7 @@ func sftpCopy(client *sftp.Client, srcPath, dstPath string) error {
 	return nil
 }
 
-func targetsSave(app GlobalState) error {
+func targetsSave(app *GlobalState) error {
 	// FIXME: since we're using JSON anyway, this should be saved to json
 	f, err := os.Create("./targets.csv")
 	if err != nil {
@@ -159,7 +161,7 @@ func targetsSave(app GlobalState) error {
 	return nil
 }
 
-func targetsLoad(app GlobalState) error {
+func targetsLoad(app *GlobalState) error {
 	// FIXME: since we're using JSON anyway, this should be loaded from json
 	f, err := os.Open("./targets.csv")
 	if err != nil {
@@ -459,7 +461,7 @@ func remoteOsStatus(target DeploymentTargetInfo) []byte {
 	return buf.Bytes()
 }
 
-func getEnv(app GlobalState, t DeploymentTargetInfo, appID string) ([]byte, error) {
+func getEnv(app *GlobalState, t DeploymentTargetInfo, appID string) ([]byte, error) {
 	appCfg, found := app.systemCfg.Applications[appID]
 
 	if !found {
@@ -507,7 +509,7 @@ func getEnv(app GlobalState, t DeploymentTargetInfo, appID string) ([]byte, erro
 	return out.Bytes(), nil
 }
 
-func getTargetFromRequest(app GlobalState, r *http.Request) (DeploymentTargetInfo, error) {
+func getTargetFromRequest(app *GlobalState, r *http.Request) (DeploymentTargetInfo, error) {
 	target, err := strconv.Atoi(r.PathValue("target"))
 	if err != nil {
 		return DeploymentTargetInfo{}, fmt.Errorf("Failed to parse target id: %s", err)
@@ -522,7 +524,7 @@ func getTargetFromRequest(app GlobalState, r *http.Request) (DeploymentTargetInf
 	return t, nil
 }
 
-func getApplicationFromRequest(app GlobalState, r *http.Request) (ApplicationConfig, error) {
+func getApplicationFromRequest(app *GlobalState, r *http.Request) (ApplicationConfig, error) {
 	applicationID := r.PathValue("application")
 
 	if s, found := app.systemCfg.Applications[applicationID]; found {
@@ -542,88 +544,20 @@ func main() {
 	rootContext := context.WithValue(tmpCtx, "app", app)
 
 	app.ctx = rootContext
-
+	app.systemCfg.DcommsConfFilesDir = "./dcomms-docker-compose"
 	app.systemCfg.Applications = make(map[string]ApplicationConfig)
 
-	app.systemCfg.Applications["peertube"] = ApplicationConfig{
-		Name:           "Peertube",
-		Started:        false,
-		ConfigFilePath: "./conf/peertube/environment",
-		// FIXME: get proper container names from compose files
-		BackupSteps: []BackupRestoreStep{
-			{
-				TmpContainerImage: "postgres:13-alpine",
-				ScriptPath:        "./peertube_backup_postgres.sh",
-			},
-			// FIXME: we do not need containers for the last two
-			{
-				TmpContainerImage: "alpine:3.23",
-				ScriptPath:        "./peertube_backup_media.sh",
-			},
-			{
-				TmpContainerImage: "alpine:3.23",
-				ScriptPath:        "./peertube_backup_final.sh",
-			},
-		},
-		RestoreSteps: []BackupRestoreStep{
-			{
-				TmpContainerImage: "postgres:13-alpine",
-				ScriptPath:        "./peertube_restore_postgres.sh",
-			},
-			{
-				TmpContainerImage: "alpine:3.23",
-				ScriptPath:        "./peertube_restore_media.sh",
-			},
-		},
-		ComposePath: "./conf/compose/peertube.docker-compose.yml",
+	// FIXME: cleanup this initialization, don't like copies, don't like panic
+	peerTubeConf, err := initPeertubeConf(rootContext)
+	if err != nil {
+		panic(err)
 	}
-
-	app.systemCfg.Applications["mastodon"] = ApplicationConfig{
-		Name:           "Mastodon",
-		Started:        false,
-		ConfigFilePath: "./conf/mastodon/env.production",
-		BackupSteps: []BackupRestoreStep{
-			{
-				TmpContainerImage: "postgres:14.13-alpine",
-				ScriptPath:        "./mastodon_backup_postgres.sh",
-			},
-			{
-				TmpContainerImage: "redis:7.0-alpine",
-				ScriptPath:        "./mastodon_backup_redis.sh",
-			},
-			{
-				TmpContainerImage: "alpine:3.23",
-				ScriptPath:        "./mastodon_backup_media.sh",
-			},
-			{
-				TmpContainerImage: "alpine:3.23",
-				ScriptPath:        "./mastodon_backup_final.sh",
-			},
-		},
-		RestoreSteps: []BackupRestoreStep{
-			{
-				TmpContainerImage: "postgres:14.13-alpine",
-				ScriptPath:        "./mastodon_restore_postgres.sh",
-			},
-			{
-				TmpContainerImage: "redis:7.0-alpine",
-				ScriptPath:        "./mastodon_restore_redis.sh",
-			},
-			{
-				TmpContainerImage: "alpine:3.23",
-				ScriptPath:        "./mastodon_restore_media.sh",
-			},
-		},
-		ComposePath: "./conf/compose/mastodon.docker-compose.yml",
+	mastodonConf, err := initMastodonConf(rootContext)
+	if err != nil {
+		panic(err)
 	}
-
-	app.systemCfg.Applications["synapse"] = ApplicationConfig{
-		Name:           "Matrix Synapse",
-		Started:        false,
-		ConfigFilePath: "./conf/synapse/livekit.yaml",
-		ComposePath:    "./conf/compose/synapse.docker-compose.yml",
-	}
-
+	app.systemCfg.Applications["peertube"] = peerTubeConf
+	app.systemCfg.Applications["mastodon"] = mastodonConf
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 	fileServer := http.FileServer(http.Dir("./static"))
 

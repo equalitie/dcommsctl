@@ -11,7 +11,7 @@ import (
 )
 
 func httpGetInfo(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(GlobalState)
+	app := r.Context().Value("app").(*GlobalState)
 	t, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -23,7 +23,7 @@ func httpGetInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpPostPanic(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(GlobalState)
+	app := r.Context().Value("app").(*GlobalState)
 	_, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -39,7 +39,7 @@ func httPostTestInstallation(app GlobalState, w http.ResponseWriter, r *http.Req
 }
 
 func httpGetTargets(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(GlobalState)
+	app := r.Context().Value("app").(*GlobalState)
 	out, err := json.Marshal(app.targets)
 	if err != nil {
 		fmt.Println("Failed to marshal targets into json:", err)
@@ -50,7 +50,7 @@ func httpGetTargets(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpPostTargetCreate(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(GlobalState)
+	app := r.Context().Value("app").(*GlobalState)
 	maxId := 0
 
 	// for now we just pick the biggest ID
@@ -99,7 +99,7 @@ func httpPostTargetCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpPostTargetUpdate(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(GlobalState)
+	app := r.Context().Value("app").(*GlobalState)
 	t, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -135,7 +135,7 @@ func httpPostTargetUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpPostRunCheckScript(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(GlobalState)
+	app := r.Context().Value("app").(*GlobalState)
 	t, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -168,7 +168,7 @@ func httpPostRunCheckScript(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpPostRunStartupScript(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(GlobalState)
+	app := r.Context().Value("app").(*GlobalState)
 	t, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -201,7 +201,7 @@ func httpPostRunStartupScript(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpPostRunStopScript(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(GlobalState)
+	app := r.Context().Value("app").(*GlobalState)
 	t, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -235,16 +235,20 @@ func httpPostRunStopScript(w http.ResponseWriter, r *http.Request) {
 
 func httpPostRunBackupScript(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	app := ctx.Value("app").(GlobalState)
+	app := ctx.Value("app").(*GlobalState)
 	_, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "can't get target %s", err)
 		return
 	}
 
+	appName := r.PathValue("application")
+	// FIXME: actually check if it's active
 	application, err := getApplicationFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "can't get application %s", err)
 		return
 	}
 
@@ -258,27 +262,32 @@ func httpPostRunBackupScript(w http.ResponseWriter, r *http.Request) {
 	defer containerClient.Close()
 
 	for _, script := range application.BackupSteps {
-		// dockerFindContainerByProjectAndService(ctx, containerClient, projectName, serviceName)
-
-		if err := dockerSpinAndRun(
-			ctx,
-			app,
-			containerClient,
-			"",
-			script.TmpContainerImage,
-			[]string{script.ScriptPath},
-			script.ScriptPath,
-			scriptContents,
-		); err != nil {
+		containers, err := dockerFindContainerByProjectAndService(ctx, containerClient, appName, script.ServiceName)
+		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
+		}
+
+		for _, container := range containers.Items {
+			if err := dockerSpinAndRun(
+				ctx,
+				app,
+				containerClient,
+				container.ID,
+				script.TmpContainerImage,
+				[]string{script.ScriptPath},
+				script.ScriptPath,
+			); err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 		}
 	}
 }
 
 func httpPostRunRestoreScript(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	app := ctx.Value("app").(GlobalState)
+	app := ctx.Value("app").(*GlobalState)
 	_, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -309,7 +318,6 @@ func httpPostRunRestoreScript(w http.ResponseWriter, r *http.Request) {
 			script.TmpContainerImage,
 			[]string{script.ScriptPath},
 			script.ScriptPath,
-			scriptContents,
 		); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -318,7 +326,7 @@ func httpPostRunRestoreScript(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpPostAddApplication(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(GlobalState)
+	app := r.Context().Value("app").(*GlobalState)
 	t, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -356,7 +364,7 @@ func httpPostAddApplication(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpPostRunInstallScript(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(GlobalState)
+	app := r.Context().Value("app").(*GlobalState)
 	t, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -372,7 +380,7 @@ func httpPostRunInstallScript(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpGetEnv(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(GlobalState)
+	app := r.Context().Value("app").(*GlobalState)
 	applicationID := r.PathValue("id")
 
 	t, err := getTargetFromRequest(app, r)

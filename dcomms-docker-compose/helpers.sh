@@ -14,3 +14,17 @@ die() {
   exit 1
 }
 
+cleanup() {
+  status=$?
+
+  if [ "$completed" -ne 1 ] && [ -n "${work_dir:-}" ] && [ -d "$work_dir" ]; then
+    rm -rf -- "$work_dir"
+  fi
+
+  if [ "$lock_acquired" -eq 1 ]; then
+    rm -f -- "$lock_dir/owner"
+    rmdir "$lock_dir" 2>/dev/null || true
+  fi
+
+  exit "$status"
+}
