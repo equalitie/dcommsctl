@@ -1,4 +1,4 @@
-module test/dcommctl
+module eq/dcommsctl
 
 go 1.26.4
 
