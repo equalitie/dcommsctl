@@ -19,9 +19,9 @@ Open url `http://localhost:8080/` in any browser
 
 # What is implemented
 
-Right now it's an application that let's you connect via SSH to a deployment target of your choice (VPS-only for now). It assumes the deployment target to be a Debian machine. It install everything required to run dcomms project, copies all the compose files required and calls a modified install script.
+Right now it's an application that you run on a host machine. It has some support for SSH connection to a VPS and running it there but not fully tested.
 
-You can connect to a VPS assuming you have a SSH-agent running and ssh key added. You specify host, username and port for SSH connection on the main page of Web UI at `http://localhost:8080/`
+It assumes the deployment target to be a Debian machine. It install everything required to run dcomms project, copies all the compose files required and calls a modified install script.
 
 A lot of the things are hardcoded for now. Podman implementation is bugged.
 
@@ -36,7 +36,7 @@ The basic structure of entities looks like this:
      * Service - Docker/Podman compose service
       * Actual containers
 
-So first of all we create a target, run install script there, then run the services
+So first of all we create a target, run install script there, then run the applications
 
 This is a rough draft, to check the actual api look at the `main.go` where mux handlers are registered
 
@@ -48,24 +48,17 @@ POST /target/{target_id}/install - install pre-requisites
 POST /target/{target_id}/start - run all applications
 POST /target/{target_id}/stop - stop all applications
 POST /target/{target_id}/check - right now pings remote Docker socket, gets API version and all running containers
+POST /target/{target_id}/backup/{application_name} - runs a backup for application
+POST /target/{target_id}/restore/{application_name} - runs a restore for application
+POST /target/{target_id}/application/add/{application_name} - adds a new application to the current stack
 ```
 
-Right now there is no properly working web UI so it's enough to just use curl:
+There is scratch throw-away Web UI at `http://localhost:8080/` but it might miss some features, so it's enough to just use curl:
 
 ```
 curl -d 'host=127.127.127.127&username=dcomms&port=22&domainname=domainname.org&backend=docker&matrix_on=on' localhost:8080/target/create
 ```
 
-# Matrix
-
-Right now `/target/{target_id}/check` is calling Matrix post installation script, it creates an admin user with login `dcomms-admin` and password `test`
-
-# TODO
-
-* parse compose files to get service names and containers they run
-
-
 # Toools to add
-
 
 * CreepPad
