@@ -173,9 +173,7 @@ func readEnv(envFile string) ([]string, error) {
 	return res, nil
 }
 
-func scriptTarStream(
-	filenames []string,
-) (io.Reader, error) {
+func scriptTarStream(filenames []string) (io.Reader, error) {
 	var buffer bytes.Buffer
 	writer := tar.NewWriter(&buffer)
 

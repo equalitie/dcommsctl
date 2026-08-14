@@ -45,8 +45,8 @@ POST /target/create - create target with POST form data, returns target data in 
 GET /target/list - get all targets in JSON format
 POST /target/{target_id}/update - update target with POST form data
 POST /target/{target_id}/install - install pre-requisites
-POST /target/{target_id}/start - run services
-POST /target/{target_id}/stop - stop services
+POST /target/{target_id}/start - run all applications
+POST /target/{target_id}/stop - stop all applications
 POST /target/{target_id}/check - right now pings remote Docker socket, gets API version and all running containers
 ```
 

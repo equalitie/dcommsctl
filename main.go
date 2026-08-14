@@ -27,7 +27,7 @@ import (
 
 // some concepts:
 //  - target (deployment target) is either VPS or cloud service
-//  - service is either docker compose unit or docker swarm service
+//  - application is either docker compose project or docker swarm service
 
 type NetworkRequest struct {
 	Name     string
@@ -35,7 +35,7 @@ type NetworkRequest struct {
 }
 
 type SystemConfig struct {
-	Services map[string]ServiceConfig
+	Applications map[string]ApplicationConfig
 }
 
 type BackupRestoreStep struct {
@@ -43,7 +43,7 @@ type BackupRestoreStep struct {
 	ScriptPath        string
 }
 
-type ServiceConfig struct {
+type ApplicationConfig struct {
 	Name         string
 	Started      bool
 	ComposePath  string
@@ -52,11 +52,6 @@ type ServiceConfig struct {
 	// TODO: ideally this is the set of files but right know I don't know how to propely handle those
 	ConfigFilePath string
 	ContainerID    string
-}
-
-type MatrixConfigData struct {
-	AdminName string
-	AdminPass string
 }
 
 type ContainerBackendType int
@@ -87,7 +82,7 @@ type DeploymentTargetInfo struct {
 	CenoEnabled     bool
 }
 
-type Application struct {
+type GlobalState struct {
 	conn DeploymentTargetInfo
 	// int as key for persistent IDs
 	targets   map[int]DeploymentTargetInfo
@@ -95,8 +90,8 @@ type Application struct {
 	systemCfg SystemConfig
 }
 
-func NewApplication() Application {
-	return Application{
+func NewGlobalState() GlobalState {
+	return GlobalState{
 		targets: make(map[int]DeploymentTargetInfo),
 	}
 }
@@ -121,7 +116,7 @@ func sftpCopy(client *sftp.Client, srcPath, dstPath string) error {
 	return nil
 }
 
-func targetsSave(app Application) error {
+func targetsSave(app GlobalState) error {
 	// FIXME: since we're using JSON anyway, this should be saved to json
 	f, err := os.Create("./targets.csv")
 	if err != nil {
@@ -138,23 +133,23 @@ func targetsSave(app Application) error {
 			backend = "podman"
 		}
 
-		services := []string{}
+		applications := []string{}
 
 		if t.MatrixEnabled {
-			services = append(services, "matrix")
+			applications = append(applications, "matrix")
 		}
 		if t.PeertubeEnabled {
-			services = append(services, "peertube")
+			applications = append(applications, "peertube")
 		}
 		if t.MastodonEnabled {
-			services = append(services, "mastodon")
+			applications = append(applications, "mastodon")
 		}
 
-		if len(services) == 0 {
+		if len(applications) == 0 {
 			continue
 		}
 
-		if err := w.Write([]string{strconv.Itoa(id), backend, t.Host, t.Port, t.User, t.Domain, strings.Join(services, "+")}); err != nil {
+		if err := w.Write([]string{strconv.Itoa(id), backend, t.Host, t.Port, t.User, t.Domain, strings.Join(applications, "+")}); err != nil {
 			fmt.Println(err)
 		}
 	}
@@ -164,7 +159,7 @@ func targetsSave(app Application) error {
 	return nil
 }
 
-func targetsLoad(app Application) error {
+func targetsLoad(app GlobalState) error {
 	// FIXME: since we're using JSON anyway, this should be loaded from json
 	f, err := os.Open("./targets.csv")
 	if err != nil {
@@ -188,12 +183,12 @@ func targetsLoad(app Application) error {
 		port := rec[3]
 		user := rec[4]
 		domain := rec[5]
-		services := rec[6]
+		applications := rec[6]
 
-		srvsSplit := strings.Split(services, "+")
+		appsSplit := strings.Split(applications, "+")
 
-		if len(srvsSplit) == 0 {
-			fmt.Printf("No services specified for a target %d, ignoring\n", id)
+		if len(appsSplit) == 0 {
+			fmt.Printf("No application specified for a target %d, ignoring\n", id)
 			continue
 		}
 
@@ -212,7 +207,7 @@ func targetsLoad(app Application) error {
 			Remote:           false,
 		}
 
-		for _, srv := range srvsSplit {
+		for _, srv := range appsSplit {
 			switch srv {
 			case "matrix":
 				t.MatrixEnabled = true
@@ -464,16 +459,16 @@ func remoteOsStatus(target DeploymentTargetInfo) []byte {
 	return buf.Bytes()
 }
 
-func getEnv(app Application, t DeploymentTargetInfo, serviceID string) ([]byte, error) {
-	serviceCfg, found := app.systemCfg.Services[serviceID]
+func getEnv(app GlobalState, t DeploymentTargetInfo, appID string) ([]byte, error) {
+	appCfg, found := app.systemCfg.Applications[appID]
 
 	if !found {
-		return nil, fmt.Errorf("Service is not registered %s", serviceID)
+		return nil, fmt.Errorf("application is not registered %s", appID)
 	}
 	var stdoutBuf bytes.Buffer
 	var out bytes.Buffer
 
-	cmd := fmt.Sprintf("podman-compose -f config %s --services", serviceCfg.ComposePath)
+	cmd := fmt.Sprintf("podman-compose -f config %s --services", appCfg.ComposePath)
 
 	if t.Remote {
 		if err := sshExecCommand(app.ctx, t, cmd); err != nil {
@@ -493,7 +488,7 @@ func getEnv(app Application, t DeploymentTargetInfo, serviceID string) ([]byte, 
 			continue
 		}
 
-		cmd := fmt.Sprintf("podman-compose -d -f %s exec %s", path.Join("/home", t.User, "dcomms", "setup", "conf", "compose", serviceCfg.ComposePath), "env")
+		cmd := fmt.Sprintf("podman-compose -d -f %s exec %s", path.Join("/home", t.User, "dcomms", "setup", "conf", "compose", appCfg.ComposePath), "env")
 
 		if t.Remote {
 			if err := sshExecCommand(app.ctx, t, cmd); err != nil {
@@ -512,7 +507,7 @@ func getEnv(app Application, t DeploymentTargetInfo, serviceID string) ([]byte, 
 	return out.Bytes(), nil
 }
 
-func getTargetFromRequest(app Application, r *http.Request) (DeploymentTargetInfo, error) {
+func getTargetFromRequest(app GlobalState, r *http.Request) (DeploymentTargetInfo, error) {
 	target, err := strconv.Atoi(r.PathValue("target"))
 	if err != nil {
 		return DeploymentTargetInfo{}, fmt.Errorf("Failed to parse target id: %s", err)
@@ -527,20 +522,20 @@ func getTargetFromRequest(app Application, r *http.Request) (DeploymentTargetInf
 	return t, nil
 }
 
-func getServiceFromRequest(app Application, r *http.Request) (ServiceConfig, error) {
-	serviceID := r.PathValue("service")
+func getApplicationFromRequest(app GlobalState, r *http.Request) (ApplicationConfig, error) {
+	applicationID := r.PathValue("application")
 
-	if s, found := app.systemCfg.Services[serviceID]; found {
+	if s, found := app.systemCfg.Applications[applicationID]; found {
 		return s, nil
 	} else {
-		return ServiceConfig{}, fmt.Errorf("Service not found: %s", serviceID)
+		return ApplicationConfig{}, fmt.Errorf("application not found: %s", applicationID)
 	}
 }
 
 func main() {
 	serverError := make(chan error, 1)
 	stop := make(chan os.Signal, 1)
-	app := NewApplication()
+	app := NewGlobalState()
 	targetsLoad(app)
 
 	tmpCtx := context.Background()
@@ -548,9 +543,9 @@ func main() {
 
 	app.ctx = rootContext
 
-	app.systemCfg.Services = make(map[string]ServiceConfig)
+	app.systemCfg.Applications = make(map[string]ApplicationConfig)
 
-	app.systemCfg.Services["peertube"] = ServiceConfig{
+	app.systemCfg.Applications["peertube"] = ApplicationConfig{
 		Name:           "Peertube",
 		Started:        false,
 		ConfigFilePath: "./conf/peertube/environment",
@@ -583,7 +578,7 @@ func main() {
 		ComposePath: "./conf/compose/peertube.docker-compose.yml",
 	}
 
-	app.systemCfg.Services["mastodon"] = ServiceConfig{
+	app.systemCfg.Applications["mastodon"] = ApplicationConfig{
 		Name:           "Mastodon",
 		Started:        false,
 		ConfigFilePath: "./conf/mastodon/env.production",
@@ -622,7 +617,7 @@ func main() {
 		ComposePath: "./conf/compose/mastodon.docker-compose.yml",
 	}
 
-	app.systemCfg.Services["synapse"] = ServiceConfig{
+	app.systemCfg.Applications["synapse"] = ApplicationConfig{
 		Name:           "Matrix Synapse",
 		Started:        false,
 		ConfigFilePath: "./conf/synapse/livekit.yaml",
@@ -641,9 +636,9 @@ func main() {
 	mux.HandleFunc("POST /target/{target}/update", httpPostTargetUpdate)
 	mux.HandleFunc("GET /target/{target}/env/{id}", httpGetEnv)
 	mux.HandleFunc("POST /target/{target}/install", httpPostRunInstallScript)
-	mux.HandleFunc("POST /target/{target}/service/add/{service}", httpPostAddService)
-	mux.HandleFunc("POST /target/{target}/backup/{service}", httpPostRunBackupScript)
-	mux.HandleFunc("POST /target/{target}/restore/{service}", httpPostRunRestoreScript)
+	mux.HandleFunc("POST /target/{target}/application/add/{application}", httpPostAddApplication)
+	mux.HandleFunc("POST /target/{target}/backup/{application}", httpPostRunBackupScript)
+	mux.HandleFunc("POST /target/{target}/restore/{application}", httpPostRunRestoreScript)
 	mux.HandleFunc("POST /target/{target}/start", httpPostRunStartupScript)
 	mux.HandleFunc("POST /target/{target}/stop", httpPostRunStopScript)
 	mux.HandleFunc("POST /target/{target}/check", httpPostRunCheckScript)

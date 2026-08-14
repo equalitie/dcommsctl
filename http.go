@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"os/exec"
 
 	dockerClient "github.com/moby/moby/client"
 )
 
 func httpGetInfo(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
+	app := r.Context().Value("app").(GlobalState)
 	t, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -24,7 +23,7 @@ func httpGetInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpPostPanic(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
+	app := r.Context().Value("app").(GlobalState)
 	_, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -35,12 +34,12 @@ func httpPostPanic(w http.ResponseWriter, r *http.Request) {
 	// TODO: remove all volumes
 }
 
-func httPostTestInstallation(app Application, w http.ResponseWriter, r *http.Request) {
+func httPostTestInstallation(app GlobalState, w http.ResponseWriter, r *http.Request) {
 	// TODO: implement a check script to see if we're ready to install Dcomms on deployment target
 }
 
 func httpGetTargets(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
+	app := r.Context().Value("app").(GlobalState)
 	out, err := json.Marshal(app.targets)
 	if err != nil {
 		fmt.Println("Failed to marshal targets into json:", err)
@@ -51,7 +50,7 @@ func httpGetTargets(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpPostTargetCreate(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
+	app := r.Context().Value("app").(GlobalState)
 	maxId := 0
 
 	// for now we just pick the biggest ID
@@ -100,7 +99,7 @@ func httpPostTargetCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpPostTargetUpdate(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
+	app := r.Context().Value("app").(GlobalState)
 	t, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -136,7 +135,7 @@ func httpPostTargetUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpPostRunCheckScript(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
+	app := r.Context().Value("app").(GlobalState)
 	t, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -169,7 +168,7 @@ func httpPostRunCheckScript(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpPostRunStartupScript(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
+	app := r.Context().Value("app").(GlobalState)
 	t, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -202,7 +201,7 @@ func httpPostRunStartupScript(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpPostRunStopScript(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
+	app := r.Context().Value("app").(GlobalState)
 	t, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -236,14 +235,14 @@ func httpPostRunStopScript(w http.ResponseWriter, r *http.Request) {
 
 func httpPostRunBackupScript(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	app := ctx.Value("app").(Application)
+	app := ctx.Value("app").(GlobalState)
 	_, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	service, err := getServiceFromRequest(app, r)
+	application, err := getApplicationFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -258,13 +257,8 @@ func httpPostRunBackupScript(w http.ResponseWriter, r *http.Request) {
 	}
 	defer containerClient.Close()
 
-	// TODO: cleanup
-	for _, script := range service.BackupSteps {
-		scriptContents, err := os.ReadFile(script.ScriptPath)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
+	for _, script := range application.BackupSteps {
+		// dockerFindContainerByProjectAndService(ctx, containerClient, projectName, serviceName)
 
 		if err := dockerSpinAndRun(
 			ctx,
@@ -284,14 +278,14 @@ func httpPostRunBackupScript(w http.ResponseWriter, r *http.Request) {
 
 func httpPostRunRestoreScript(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	app := ctx.Value("app").(Application)
+	app := ctx.Value("app").(GlobalState)
 	_, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	service, err := getServiceFromRequest(app, r)
+	application, err := getApplicationFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -306,14 +300,7 @@ func httpPostRunRestoreScript(w http.ResponseWriter, r *http.Request) {
 	}
 	defer containerClient.Close()
 
-	// TODO: cleanup
-	for _, script := range service.RestoreSteps {
-		scriptContents, err := os.ReadFile(script.ScriptPath)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
+	for _, script := range application.RestoreSteps {
 		if err := dockerSpinAndRun(
 			ctx,
 			app,
@@ -330,8 +317,8 @@ func httpPostRunRestoreScript(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func httpPostAddService(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
+func httpPostAddApplication(w http.ResponseWriter, r *http.Request) {
+	app := r.Context().Value("app").(GlobalState)
 	t, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -339,8 +326,8 @@ func httpPostAddService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	serviceID := r.PathValue("service")
-	service, found := app.systemCfg.Services[serviceID]
+	applicationID := r.PathValue("application")
+	application, found := app.systemCfg.Applications[applicationID]
 
 	if !found {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -348,14 +335,14 @@ func httpPostAddService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if service.Name == "mastodon" {
+	if application.Name == "mastodon" {
 		t.MastodonEnabled = true
 	}
-	if service.Name == "matrix" {
+	if application.Name == "matrix" {
 		t.MatrixEnabled = true
 	}
 
-	if service.Name == "peertube" {
+	if application.Name == "peertube" {
 		t.PeertubeEnabled = true
 	}
 
@@ -369,7 +356,7 @@ func httpPostAddService(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpPostRunInstallScript(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
+	app := r.Context().Value("app").(GlobalState)
 	t, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -385,8 +372,8 @@ func httpPostRunInstallScript(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpGetEnv(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(Application)
-	serviceID := r.PathValue("id")
+	app := r.Context().Value("app").(GlobalState)
+	applicationID := r.PathValue("id")
 
 	t, err := getTargetFromRequest(app, r)
 	if err != nil {
@@ -395,7 +382,7 @@ func httpGetEnv(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	env, err := getEnv(app, t, serviceID)
+	env, err := getEnv(app, t, applicationID)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println("Get env variables problem", err)

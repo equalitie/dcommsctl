@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"context"
+	"fmt"
 
 	// "go.podman.io/podman/v6/pkg/bindings"
 	"github.com/compose-spec/compose-go/v2/cli"
@@ -19,19 +19,16 @@ func compose(path string) error {
 		cli.WithDotEnv,
 		cli.WithName("proj"),
 	)
-
 	if err != nil {
 		return fmt.Errorf("Composer parser options err: %s", err)
 	}
 
 	prj, err := opt.LoadProject(ctx)
-
 	if err != nil {
 		return err
 	}
 
-	srvs, err := prj.GetServices() 
-
+	srvs, err := prj.GetServices()
 	if err != nil {
 		return nil
 	}
@@ -45,12 +42,11 @@ func compose(path string) error {
 	return nil
 }
 
-func testAllServices(app Application) {
+func testAllServices(app GlobalState) {
 	// FIXME: that's for local paths right now, we need to work on actually reading it from the OS, not letting the module read it
-	for _, srv := range app.systemCfg.Services {
+	for _, srv := range app.systemCfg.Applications {
 		if err := compose(srv.ComposePath); err != nil {
 			fmt.Println(err)
 		}
 	}
 }
-

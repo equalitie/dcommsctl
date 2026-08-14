@@ -1,12 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
-	"context"
 
 	dockerClient "github.com/moby/moby/client"
 )
+
+type MatrixConfigData struct {
+	AdminName string
+	AdminPass string
+}
 
 func matrixPostInstall(ctx context.Context, cli *dockerClient.Client) error {
 	result, err := cli.ContainerList(ctx, dockerClient.ContainerListOptions{
@@ -34,4 +39,3 @@ func matrixPostInstall(ctx context.Context, cli *dockerClient.Client) error {
 
 	return nil
 }
-
