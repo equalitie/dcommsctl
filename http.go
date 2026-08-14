@@ -160,7 +160,7 @@ func httpPostRunCheckScript(w http.ResponseWriter, r *http.Request) {
 
 	app.targets[t.ID] = t
 
-	if err := sshDockerInspectContainers(ctx, cli); err != nil {
+	if err := dockerInspectContainers(ctx, cli); err != nil {
 		fmt.Println("Failed to inspect docker containers", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "Inspecting containers on target failed: %s", err)

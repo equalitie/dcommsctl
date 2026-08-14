@@ -23,7 +23,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-func sshDockerInspectContainers(ctx context.Context, cli *dockerClient.Client) error {
+func dockerInspectContainers(ctx context.Context, cli *dockerClient.Client) error {
 	result, err := cli.ContainerList(ctx, dockerClient.ContainerListOptions{
 		All: true,
 	})
@@ -61,22 +61,6 @@ func sshDockerInspectContainers(ctx context.Context, cli *dockerClient.Client) e
 		ramUsed := float32(stats.MemoryStats.Usage) / float32(stats.MemoryStats.Limit)
 
 		fmt.Printf("%-22s %d %d %d %d %d %f\n", ctr.Image, info.Container.SizeRw, r.Memory, r.NanoCPUs, r.CPUQuota, r.CPUShares, ramUsed)
-	}
-
-	return nil
-}
-
-func sshDockerListContainers(ctx context.Context, cli *dockerClient.Client) error {
-	result, err := cli.ContainerList(ctx, dockerClient.ContainerListOptions{
-		All: true,
-	})
-	if err != nil {
-		return fmt.Errorf("Failed to list all docker containers: %s", err)
-	}
-
-	fmt.Printf("%s  %-22s  %s\n", "ID", "STATUS", "IMAGE")
-	for _, ctr := range result.Items {
-		fmt.Printf("%s  %-22s  %s\n", ctr.ID, ctr.Status, ctr.Image)
 	}
 
 	return nil
