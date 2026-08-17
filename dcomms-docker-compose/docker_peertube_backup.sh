@@ -7,11 +7,13 @@ work_dir="$final_dir.partial"
 completed=0
 # TODO: locks
 lock_acquired=0
-
 source ./helpers.sh
 
 cleanup() {
   status=$?
+
+  # NOTE: can I just run this and not store if containers was stopped
+  sh ./dcomms_compose.sh start peertube-back 2>/dev/null
 
   if [ "$completed" -ne 1 ] && [ -n "${work_dir:-}" ] && [ -d "$work_dir" ]; then
     rm -rf -- "$work_dir"
@@ -41,18 +43,19 @@ bash ./dcomms_compose.sh exec -T peertube-postgres sh -c \
   'PG_PASSWORD=$POSTGRES_PASSWORD pg_dumpall 2>/dev/null \
     -U $POSTGRES_USER \
     -l $POSTGRES_DB' | \
-  gzip > "$work_dir"/pgdump.sql.gz
+  gzip > "$work_dir/pgump.sql.gz"
 
-# bash ./dcomms_compose.sh exec peertube-redis redis-cli BGSAVE 2>/dev/null | \
-# gzip > "$work_dir/redis.gz"
+# FIXME: figure out auth, works for default setup with an empty password
+bash ./dcomms_compose.sh exec -T peertube-redis sh -c \
+  'redis-cli SAVE' | \
+  gzip > "$work_dir/redis.rdb.gz"
 
-# docker run --rm \
-#   --volumes-from ${DATA_CONTAINER} \
-#   -v "${BACKUP_ROOT}/peertube/volume" \
-#   alpine:latest \
-#   tar czf "/backup/" -C /data .
-
-sh ./dcomms_compose.sh stop peertube-back
+docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  --volumes-from $(bash ./dcomms_compose.sh ps -aq peertube-back) \
+  -v "$work_dir:/backup" \
+  alpine:latest \
+  tar czf /backup/content.tar.gz /data
 
 chmod 600 "$work_dir"/*
 mv -- "$work_dir" "$final_dir"
