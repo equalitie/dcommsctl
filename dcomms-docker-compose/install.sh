@@ -20,28 +20,6 @@ i=0
 echo "This script may require root access to interact with Docker."
 sudo echo ""
 
-#This funciton uses which to discover what packages are installed on this system.
-#Should investigate which command has the most interoperability
-check_requirements () {
-    if ! which dig curl docker >/dev/null; then
-        printf "${RED}## Some dependencies are not installed\n"
-        printf "Please install:\n"
-        printf " curl\n"
-        printf " dnsutils\n"
-        printf " docker (https://docs.docker.com/engine/install/)\n"
-        printf "${NC}\n"
-        exit 1
-    fi
-    if which torify >/dev/null; then
-        TOR_AVAIL=true
-    else
-        printf "${YELLOW}## This script can take advantage of Tor to route around "
-        printf "blockages and allow users to connect anonymously to your server.\n"
-        printf "If you would like this functionality enabled please install 'torsocks'"
-	    printf " from your package manager and re-run the script.${NC}\n"
-    fi
-}
-
 detect_connectivity () {
     # This function tests all available means to retrieve the dComms repository.
     if  docker pull hello-world >/dev/null 2>&1; then
@@ -194,7 +172,6 @@ main() {
     export CENO=false
     export MAU=false
     export MASTO=false
-    check_requirements
 
     # DWEB_DOMAIN=$(whiptail --inputbox "What domain would you like to use?" 8 39 --title "Domain Name" 3>&1 1>&2 2>&3)
     # exitstatus=$?
@@ -331,7 +308,7 @@ main() {
     if [[ "${PEERTUBE}" == true ]]; then
         peertube_config
     fi
-    echo "sudo DWEB_ONION=$DWEB_ONION DWEB_DOMAIN=$DWEB_DOMAIN DWEB_FRIENDLY_DOMAIN=$DWEB_FRIENDLY_DOMAIN docker compose $COMPOSE_FILES up -d" >> $DCOMMS_DIR/run.sh
+    echo "DWEB_ONION=$DWEB_ONION DWEB_DOMAIN=$DWEB_DOMAIN DWEB_FRIENDLY_DOMAIN=$DWEB_FRIENDLY_DOMAIN docker compose $COMPOSE_FILES up -d" >> $DCOMMS_DIR/run.sh
     cp $DCOMMS_DIR/{run,stop}.sh
     sed -i -e 's/up -d/down/g' $DCOMMS_DIR/stop.sh
     chmod +x $DCOMMS_DIR/run.sh $DCOMMS_DIR/stop.sh
