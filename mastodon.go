@@ -12,7 +12,7 @@ func initMastodonConf(ctx context.Context) (ApplicationConfig, error) {
 	composeFilePath := app.systemCfg.DcommsConfFilesDir + "/conf/compose/mastodon.docker-compose.yml"
 
 	cfg := ApplicationConfig{
-		Name:           "Mastodon",
+		Name:           "mastodon",
 		Started:        false,
 		ConfigFilePath: app.systemCfg.DcommsConfFilesDir + "/conf/mastodon/env.production",
 		BackupSteps: []BackupRestoreStep{

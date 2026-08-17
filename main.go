@@ -547,7 +547,7 @@ func main() {
 	app.systemCfg.DcommsConfFilesDir = "./dcomms-docker-compose"
 	app.systemCfg.Applications = make(map[string]ApplicationConfig)
 
-	// FIXME: cleanup this initialization, don't like copies, don't like panic
+	// FIXME: don't like panic
 	peerTubeConf, err := initPeertubeConf(rootContext)
 	if err != nil {
 		panic(err)
@@ -556,8 +556,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	app.systemCfg.Applications["peertube"] = peerTubeConf
-	app.systemCfg.Applications["mastodon"] = mastodonConf
+	app.systemCfg.Applications[peerTubeConf.Name] = peerTubeConf
+	app.systemCfg.Applications[mastodonConf.Name] = mastodonConf
+
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 	fileServer := http.FileServer(http.Dir("./static"))
 
