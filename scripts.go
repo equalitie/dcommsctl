@@ -114,7 +114,7 @@ func scriptInstall(ctx context.Context, t DeploymentTargetInfo) error {
 		// TODO: we need to also stream this, not wait for the whole output and probably leave some markers in output to check for progress
 		fmt.Println(string(output))
 		if err != nil {
-			return fmt.Errorf("pre-req install script %s", err)
+			return fmt.Errorf("pre-req install script: %s", err)
 		}
 		fmt.Println("--- End of pre-req install script  ---")
 
@@ -129,7 +129,7 @@ func scriptInstall(ctx context.Context, t DeploymentTargetInfo) error {
 		installOutput, err := installCmd.CombinedOutput()
 		fmt.Println(string(installOutput))
 		if err != nil {
-			return fmt.Errorf("install script %s", err)
+			return fmt.Errorf("install script: %s", err)
 		}
 
 	}
