@@ -16,6 +16,7 @@ import (
 	"github.com/moby/moby/api/types/container"
 	dockerContainer "github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
+	"github.com/moby/moby/client"
 	dockerClient "github.com/moby/moby/client"
 
 	"github.com/compose-spec/compose-go/v2/cli"
@@ -373,4 +374,86 @@ func dockerSpinAndRun(
 	strings.TrimSpace(stdout.String())
 
 	return nil
+}
+
+// this is a reference implementation in Go probably gonna use
+func dockerPostgreSQLDirectCopy(ctx context.Context, cli *dockerClient.Client) error {
+	fromContainer := ""
+	toContainer := ""
+
+	dumpCmd := []string{}
+	restoreCmd := []string{}
+	dumpExec, err := cli.ExecCreate(
+		ctx,
+		fromContainer,
+
+		dockerClient.ExecCreateOptions{
+			Cmd:          dumpCmd,
+			AttachStderr: true,
+			AttachStdout: true,
+			TTY:          false,
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	restoreExec, err := cli.ExecCreate(
+		ctx,
+		toContainer,
+		dockerClient.ExecCreateOptions{
+			Cmd:          restoreCmd,
+			AttachStderr: true,
+			AttachStdin:  true,
+			AttachStdout: true,
+			TTY:          false,
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	dumpAttach, err := cli.ExecAttach(
+		ctx,
+		dumpExec.ID,
+		client.ExecAttachOptions{TTY: false},
+	)
+	if err != nil {
+		return err
+	}
+
+	defer dumpAttach.Close()
+
+	restoreAttach, err := cli.ExecAttach(
+		ctx,
+		restoreExec.ID,
+		client.ExecAttachOptions{TTY: false},
+	)
+	if err != nil {
+		return err
+	}
+	defer restoreAttach.Close()
+
+	if _, err := stdcopy.StdCopy(
+		restoreAttach.Conn,
+		prefixedWriter{"pg_dump: ", os.Stderr},
+		dumpAttach.Reader,
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type prefixedWriter struct {
+	prefix string
+	dst    io.Writer
+}
+
+func (w prefixedWriter) Write(p []byte) (int, error) {
+	if _, err := fmt.Fprintf(w.dst, w.prefix); err != nil {
+		return 0, err
+	}
+
+	return w.dst.Write(p)
 }
