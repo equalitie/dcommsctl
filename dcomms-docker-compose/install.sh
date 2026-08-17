@@ -298,6 +298,7 @@ main() {
     if [[ "${PEERTUBE}" == true ]]; then
         peertube_config
     fi
+    echo "DWEB_ONION=$DWEB_ONION DWEB_DOMAIN=$DWEB_DOMAIN DWEB_FRIENDLY_DOMAIN=$DWEB_FRIENDLY_DOMAIN docker compose $COMPOSE_FILES \"$@\"" > $DCOMMS_DIR/docker_compose.sh
     echo "DWEB_ONION=$DWEB_ONION DWEB_DOMAIN=$DWEB_DOMAIN DWEB_FRIENDLY_DOMAIN=$DWEB_FRIENDLY_DOMAIN docker compose $COMPOSE_FILES up -d" >> $DCOMMS_DIR/run.sh
     cp $DCOMMS_DIR/{run,stop}.sh
     sed -i -e 's/up -d/down/g' $DCOMMS_DIR/stop.sh
