@@ -144,6 +144,7 @@ func peertubePostInstall(ctx context.Context, cli *dockerClient.Client) error {
 
 // This is an test version of calling docker API from the bash script
 func peertubeDockerBackup(ctx context.Context, app *GlobalState) error {
+	// FIXME: figure out where we store that
 	backupRoot := "./.backup"
 	// FIXME: we need to store this somewhere and generate it dynamically
 	backupID := "tmp1"
@@ -152,22 +153,14 @@ func peertubeDockerBackup(ctx context.Context, app *GlobalState) error {
 	cli, err := dockerClient.New(
 		dockerClient.FromEnv,
 	)
-
-	postgresContainer := ""
-
-	dataContainer := ""
-
-	containers, err := dockerFindContainerByProjectAndService(ctx, cli, "compose_peertube", "peertube-postgres")
-
-	for _, container := range containers.Items {
-		postgresContainer = container.ID
+	if err != nil {
+		return err
 	}
+	defer cli.Close()
 
-	containers, err = dockerFindContainerByProjectAndService(ctx, cli, "compose_peertube", "peertube-back")
-
-	for _, container := range containers.Items {
-		dataContainer = container.ID
-	}
+	// NOTE: I'm not using this for now, but maybe it makes sense to fetch those from docker compose files
+	postgresContainer := "peertube-postgres"
+	dataContainer := "peertube-back"
 
 	cmd := exec.CommandContext(ctx, "bash", "./docker_peertube_backup.sh")
 

@@ -188,7 +188,7 @@ func httpPostRunStartupScript(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		cmd := exec.CommandContext(ctx, "bash", "./run.sh")
+		cmd := exec.CommandContext(ctx, "bash", "dcomms_compose.sh", "up -d")
 		cmd.Dir = pathToDComms
 
 		scriptOut, err := cmd.CombinedOutput()
@@ -222,7 +222,7 @@ func httpPostRunStopScript(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		cmd := exec.CommandContext(ctx, "bash", "./stop.sh")
+		cmd := exec.CommandContext(ctx, "bash", "dcomms_compose.sh", "down")
 		cmd.Dir = pathToDComms
 
 		scriptOut, err := cmd.CombinedOutput()
@@ -293,6 +293,7 @@ func httpPostRunBackupScript(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	fmt.Fprint(w, "Done")
 }
 
 func httpPostRunRestoreScript(w http.ResponseWriter, r *http.Request) {
