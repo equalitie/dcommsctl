@@ -168,7 +168,8 @@ func httpPostRunCheckScript(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpPostRunStartupScript(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(*GlobalState)
+	ctx := r.Context()
+	app := ctx.Value("app").(*GlobalState)
 	t, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -180,14 +181,14 @@ func httpPostRunStartupScript(w http.ResponseWriter, r *http.Request) {
 	pathToDCommsRun := pathToDComms + "/run.sh"
 
 	if t.Remote {
-		err = sshExecCommand(r.Context(), t, `cd `+pathToDComms+` && PATH=$PATH:~/.local/bin `+pathToDCommsRun)
+		err = sshExecCommand(ctx, t, `cd `+pathToDComms+` && PATH=$PATH:~/.local/bin `+pathToDCommsRun)
 		if err != nil {
 			fmt.Println("Failed to exec run.sh script:", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 	} else {
-		cmd := exec.Command("bash", pathToDCommsRun)
+		cmd := exec.CommandContext(ctx, "bash", "./run.sh")
 		cmd.Dir = pathToDComms
 
 		scriptOut, err := cmd.CombinedOutput()
@@ -201,7 +202,8 @@ func httpPostRunStartupScript(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpPostRunStopScript(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(*GlobalState)
+	ctx := r.Context()
+	app := ctx.Value("app").(*GlobalState)
 	t, err := getTargetFromRequest(app, r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -213,14 +215,14 @@ func httpPostRunStopScript(w http.ResponseWriter, r *http.Request) {
 	pathToDCommsStop := pathToDComms + "/stop.sh"
 
 	if t.Remote {
-		err = sshExecCommand(r.Context(), t, `cd `+pathToDComms+` && PATH=$PATH:~/.local/bin `+pathToDCommsStop)
+		err = sshExecCommand(ctx, t, `cd `+pathToDComms+` && PATH=$PATH:~/.local/bin `+pathToDCommsStop)
 		if err != nil {
 			fmt.Println("Failed to exec run.sh script:", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 	} else {
-		cmd := exec.Command("bash", pathToDCommsStop)
+		cmd := exec.CommandContext(ctx, "bash", "./stop.sh")
 		cmd.Dir = pathToDComms
 
 		scriptOut, err := cmd.CombinedOutput()
@@ -252,34 +254,42 @@ func httpPostRunBackupScript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	containerClient, err := dockerClient.New(
-		dockerClient.FromEnv,
-	)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	defer containerClient.Close()
-
-	for _, script := range application.BackupSteps {
-		containers, err := dockerFindContainerByProjectAndService(ctx, containerClient, appName, script.ServiceName)
+	if appName == "peertube" {
+		if err := peertubeDockerBackup(ctx, app); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "peertube backup: %s", err)
+			return
+		}
+	} else {
+		cli, err := dockerClient.New(
+			dockerClient.FromEnv,
+		)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		defer cli.Close()
 
-		for _, container := range containers.Items {
-			if err := dockerSpinAndRun(
-				ctx,
-				app,
-				containerClient,
-				container.ID,
-				script.TmpContainerImage,
-				[]string{script.ScriptPath},
-				script.ScriptPath,
-			); err != nil {
+		for _, script := range application.BackupSteps {
+			containers, err := dockerFindContainerByProjectAndService(ctx, cli, appName, script.ServiceName)
+			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
+			}
+
+			for _, container := range containers.Items {
+				if err := dockerSpinAndRun(
+					ctx,
+					app,
+					cli,
+					container.ID,
+					script.TmpContainerImage,
+					[]string{script.ScriptPath},
+					script.ScriptPath,
+				); err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
 			}
 		}
 	}
