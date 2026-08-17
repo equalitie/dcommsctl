@@ -153,16 +153,6 @@ mau_config () {
 
 #The main function does most of the configuration
 main() {
-    if [ -z $DCOMMS_DIR ]; then
-        printf "${RED}No directory set for dcomms files.\nPlease edit the "
-        printf "'DCOMMS_DIR' variable at the top of this script and run again.${NC}\n"
-        exit 1
-    elif [ -f $DCOMMS_DIR/run.sh ]; then # || [ -d $DCOMMS_DIR/conf/ ]; then
-        printf "${RED}A previous installation of dcomms was found on this system.\n"
-        printf "To start your services please use 'run.sh' in '$DCOMMS_DIR'.${NC}\n"
-        exit 1
-    fi
-
     export NEWT_COLORS='
     root=,black
     checkbox=,black
