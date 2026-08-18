@@ -42,9 +42,9 @@ bash ./dcomms_compose.sh stop mastodon-sidekiq
 # sleep 1
 
 bash ./dcomms_compose.sh exec -T mastodon-db sh -c \
-  'PG_PASSWORD=$POSTGRES_PASSWORD pg_dumpall 2>/dev/null \
-    -U $POSTGRES_USER \
-    -l $POSTGRES_DB' | \
+  'PGPASSWORD=$DB_PASSWORD pg_dumpall 2>/dev/null \
+    -U $DB_USER \
+    -l $DB_NAME' | \
   gzip > "$work_dir/pgdump.sql.gz"
 
 bash ./dcomms_compose.sh exec -T mastodon-redis sh -c \

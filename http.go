@@ -245,7 +245,6 @@ func httpPostRunBackupScript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	appName := r.PathValue("application")
 	// FIXME: actually check if it's active
 	application, err := getApplicationFromRequest(app, r)
 	if err != nil {
@@ -254,42 +253,22 @@ func httpPostRunBackupScript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if appName == "peertube" {
-		if err := peertubeDockerBackup(ctx, app); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "peertube backup: %s", err)
-			return
-		}
-	} else {
-		cli, err := dockerClient.New(
-			dockerClient.FromEnv,
-		)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		defer cli.Close()
+	switch application.Name {
 
-		for _, script := range application.BackupSteps {
-			containers, err := dockerFindContainerByProjectAndService(ctx, cli, appName, script.ServiceName)
-			if err != nil {
+	case "peertube":
+		{
+			if err := peertubeDockerBackup(ctx, app); err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintf(w, "peertube backup: %s", err)
 				return
 			}
-
-			for _, container := range containers.Items {
-				if err := dockerSpinAndRun(
-					ctx,
-					app,
-					cli,
-					container.ID,
-					script.TmpContainerImage,
-					[]string{script.ScriptPath},
-					script.ScriptPath,
-				); err != nil {
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
+		}
+	case "mastodon":
+		{
+			if err := mastodonDockerBackup(ctx, app); err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintf(w, "peertube backup: %s", err)
+				return
 			}
 		}
 	}
@@ -311,27 +290,38 @@ func httpPostRunRestoreScript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	containerClient, err := dockerClient.New(
-		dockerClient.FromEnv,
-	)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	defer containerClient.Close()
+	appName := r.PathValue("application")
 
-	for _, script := range application.RestoreSteps {
-		if err := dockerSpinAndRun(
-			ctx,
-			app,
-			containerClient,
-			"",
-			script.TmpContainerImage,
-			[]string{script.ScriptPath},
-			script.ScriptPath,
-		); err != nil {
+	if appName == "peertube" {
+		// FIXME: get a backupID
+		if err := peertubeDockerRestore(ctx, app, "tmp1"); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "peertube restore: %s", err)
+			return
+		}
+	} else {
+		containerClient, err := dockerClient.New(
+			dockerClient.FromEnv,
+		)
+		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
+		}
+		defer containerClient.Close()
+
+		for _, script := range application.RestoreSteps {
+			if err := dockerSpinAndRun(
+				ctx,
+				app,
+				containerClient,
+				"",
+				script.TmpContainerImage,
+				[]string{script.ScriptPath},
+				script.ScriptPath,
+			); err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 		}
 	}
 }

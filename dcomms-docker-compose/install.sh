@@ -36,12 +36,12 @@ detect_connectivity () {
         printf "\n\n${RED}## All methods of retrieving dComms docker images have failed\n"
         printf "## Don't despair!\n"
         printf "## If you manage to retrieve tarfiles of the images listed below\n"
-      	printf "## place them in the $DCOMMS_DIR folder and re-run this script.\n"
+        printf "## place them in the $DCOMMS_DIR folder and re-run this script.\n"
         printf "## Alternately, try configuring a VPN and re-try\n"
         for i in ${D_IMAGES[@]}; do
-             printf "$i\n"
+            printf "$i\n"
         done
-	printf "${NC}"
+        printf "${NC}"
         exit 1
     fi
 
@@ -55,7 +55,7 @@ matrix_config () {
         -e SYNAPSE_SERVER_NAME=matrix.$DWEB_DOMAIN \
         -e SYNAPSE_REPORT_STATS=no \
         -e SYNAPSE_DATA_DIR=/data \
-    matrixdotorg/synapse:$SYN_V generate 2>/dev/null
+        matrixdotorg/synapse:$SYN_V generate 2>/dev/null
 
     sudo chown -R $USER:$USER $DCOMMS_DIR/conf/synapse/
     sudo chown -R $USER:$USER $DCOMMS_DIR/conf/element
@@ -89,23 +89,23 @@ mastodon_config () {
     sudo cp -a $DCOMMS_DIR/conf/mastodon/example.env.production $DCOMMS_DIR/conf/mastodon/env.production
     SECRET_KEY_BASE=$(docker run --rm \
         --mount type=volume,src=masto_data_tmp,dst=/opt/mastodon \
-            -e RUBYOPT=-W0 tootsuite/mastodon:$MAS_V \
+        -e RUBYOPT=-W0 tootsuite/mastodon:$MAS_V \
         bundle exec rails secret) >/dev/null
 
     OTP_SECRET=$(docker run --rm \
         --mount type=volume,src=masto_data_tmp,dst=/opt/mastodon \
-            -e RUBYOPT=-W0 tootsuite/mastodon:$MAS_V \
+        -e RUBYOPT=-W0 tootsuite/mastodon:$MAS_V \
         bundle exec rails secret) >/dev/null
 
     VAPID_KEYS=$(docker run --rm \
         --mount type=volume,src=masto_data_tmp,dst=/opt/mastodon \
-            -e RUBYOPT=-W0 tootsuite/mastodon:$MAS_V \
+        -e RUBYOPT=-W0 tootsuite/mastodon:$MAS_V \
         bundle exec rails mastodon:webpush:generate_vapid_key)>/dev/null
     VAPID_FRIENDLY_KEYS=${VAPID_KEYS//$'\n'/\\$'\n'}
 
     ACTIVE_RECORD_ENCRYPTION=$(docker run --rm \
         --mount type=volume,src=masto_data_tmp,dst=/opt/mastodon \
-            -e RUBYOPT=-W0 tootsuite/mastodon:$MAS_V \
+        -e RUBYOPT=-W0 tootsuite/mastodon:$MAS_V \
         bundle exec rake db:encryption:init | tail -3)>/dev/null
     ACTIVE_RECORD_ENCRYPTION_FRIENDLY_KEYS=${ACTIVE_RECORD_ENCRYPTION//$'\n'/\\$'\n'}
 
@@ -120,9 +120,9 @@ mastodon_config () {
     sed -i "s/ALTERNATE_DOMAINS=social./&$DWEB_ONION/" $DCOMMS_DIR/conf/mastodon/env.production
     sed -i "s/SMTP_SERVER=/&$DWEB_DOMAIN/" $DCOMMS_DIR/conf/mastodon/env.production
     #sed -i "s/REDIS_PASSWORD=/&$REDIS_PW/" $DCOMMS_DIR/conf/mastodon/env.production
-    
+
     printf "${YELLOW}## Initializing mastodon database${NC}\n"
-    
+
     docker compose -f ./conf/compose/mastodon.docker-compose.yml run --entrypoint="bundle exec rails db:create" --rm mastodon-web
     docker compose -f ./conf/compose/mastodon.docker-compose.yml run --entrypoint="bundle exec rake db:prepare" --rm mastodon-web
     docker compose -f ./conf/compose/mastodon.docker-compose.yml run --entrypoint="bundle exec rake db:migrate" --rm mastodon-web
@@ -188,53 +188,53 @@ main() {
 
     if [ -z "$CHOICES" ]; then
         CHOICES=$(whiptail --separate-output --checklist "Which services would you like?" 10 35 5 \
-        "1" "Element & Synapse" ON \
-        "2" "Ceno Bridge" ON \
-        "3" "Maubot" OFF \
-        "4" "Mastodon" OFF \
-        "5" "Peertube" OFF 3>&1 1>&2 2>&3)
+            "1" "Element & Synapse" ON \
+            "2" "Ceno Bridge" ON \
+            "3" "Maubot" OFF \
+            "4" "Mastodon" OFF \
+            "5" "Peertube" OFF 3>&1 1>&2 2>&3)
     fi
 
     if [ -z "$CHOICES" ]; then
-      echo "No option was selected (user hit Cancel or unselected all options)"
-      exit
+        echo "No option was selected (user hit Cancel or unselected all options)"
+        exit
     else
-      for CHOICE in $CHOICES; do
-        case "$CHOICE" in
-        "matrix")
-            D_IMAGES+=("vectorim/element-web:v1.12.1" "matrixdotorg/synapse:$SYN_V")
-            COMPOSE_FILES+="-f ./conf/compose/element.docker-compose.yml -f ./conf/compose/synapse.docker-compose.yml "
-            MATRIX=true
-            DNS_RECORD="${DNS_RECORD}Chat $(dig +short "chat.$DWEB_DOMAIN")\n"
-            DNS_RECORD="${DNS_RECORD}Matrix $(dig +short "matrix.$DWEB_DOMAIN")\n"
-          ;;
-        "ceno")
-            D_IMAGES+=("equalitie/ceno-client:v0.21.2")
-            COMPOSE_FILES+="-f ./conf/compose/bridge.docker-compose.yml "
-            CENO=true
-          ;;
-        "mau")
-            D_IMAGES+=("dock.mau.dev/maubot/maubot:v0.3.1")
-            COMPOSE_FILES+="-f ./conf/compose/mau.docker-compose.yml "
-            MAU=true
-          ;;
-        "mastodon")
-            D_IMAGES+=("tootsuite/mastodon:$MAS_V" "redis:7.0-alpine" "postgres:14-alpine")
-            COMPOSE_FILES+="-f ./conf/compose/mastodon.docker-compose.yml "
-            MASTO=true
-            DNS_RECORD="${DNS_RECORD}Mastodon $(dig +short "social.$DWEB_DOMAIN")\n"
-          ;;
-        "peertube")
-            COMPOSE_FILES+="-f ./conf/compose/peertube.docker-compose.yml "
-            PEERTUBE=true
-            DNS_RECORD="${DNS_RECORD}Peertube $(dig +short "peertube.$DWEB_DOMAIN")\n"
-	  ;;
-        *)
-          echo "Unsupported item $CHOICE!" >&2
-          exit 1
-          ;;
-        esac
-      done
+        for CHOICE in $CHOICES; do
+            case "$CHOICE" in
+                "matrix")
+                    D_IMAGES+=("vectorim/element-web:v1.12.1" "matrixdotorg/synapse:$SYN_V")
+                    COMPOSE_FILES+="-f ./conf/compose/element.docker-compose.yml -f ./conf/compose/synapse.docker-compose.yml "
+                    MATRIX=true
+                    DNS_RECORD="${DNS_RECORD}Chat $(dig +short "chat.$DWEB_DOMAIN")\n"
+                    DNS_RECORD="${DNS_RECORD}Matrix $(dig +short "matrix.$DWEB_DOMAIN")\n"
+                    ;;
+                "ceno")
+                    D_IMAGES+=("equalitie/ceno-client:v0.21.2")
+                    COMPOSE_FILES+="-f ./conf/compose/bridge.docker-compose.yml "
+                    CENO=true
+                    ;;
+                "mau")
+                    D_IMAGES+=("dock.mau.dev/maubot/maubot:v0.3.1")
+                    COMPOSE_FILES+="-f ./conf/compose/mau.docker-compose.yml "
+                    MAU=true
+                    ;;
+                "mastodon")
+                    D_IMAGES+=("tootsuite/mastodon:$MAS_V" "redis:7.0-alpine" "postgres:14-alpine")
+                    COMPOSE_FILES+="-f ./conf/compose/mastodon.docker-compose.yml "
+                    MASTO=true
+                    DNS_RECORD="${DNS_RECORD}Mastodon $(dig +short "social.$DWEB_DOMAIN")\n"
+                    ;;
+                "peertube")
+                    COMPOSE_FILES+="-f ./conf/compose/peertube.docker-compose.yml "
+                    PEERTUBE=true
+                    DNS_RECORD="${DNS_RECORD}Peertube $(dig +short "peertube.$DWEB_DOMAIN")\n"
+                    ;;
+                *)
+                    echo "Unsupported item $CHOICE!" >&2
+                    exit 1
+                    ;;
+            esac
+        done
     fi
 
     # DNS=$(whiptail --title "DNS Records" --yesno "Do these DNS records look right?\n$DNS_RECORD" 16 78 10 3>&1 1>&2 2>&3; echo $?)
@@ -244,9 +244,9 @@ main() {
     #     exit
     # fi
 
-    TMP_DIR_F=$(mktemp -d)    
+    TMP_DIR_F=$(mktemp -d)
 
-    trap 'rm -rf "$TMP_DIR_C"' EXIT 
+    trap 'rm -rf "$TMP_DIR_C"' EXIT
 
     if [[ "${MAU}" == true ]] && [[ "${MATRIX}" == false ]]; then
         printf "${RED}##Mau is a Matrix bot. You must install Matrix as well.${NC}\n"
@@ -269,7 +269,7 @@ main() {
                 unset 'FILES[$di]'
                 ((di=di+=1))
             fi
-           
+
         done
     elif [[ "${HUB_REACHABLE}" == false ]] && [[ "${TOR_AVAIL}" == true ]]; then
         di=1
@@ -280,7 +280,7 @@ main() {
                 unset 'FILES[$di]'
                 ((di=di+=1))
             fi
-           
+
         done
     fi
 
@@ -290,7 +290,7 @@ main() {
     fi
     if [[ "${MAU}" == true ]]; then
         mau_config
- 	echo 'echo "Mau credentials = '${MAU_CREDS}'"' >> $DCOMMS_DIR/run.sh
+        echo 'echo "Mau credentials = '${MAU_CREDS}'"' >> $DCOMMS_DIR/run.sh
     fi
     if [[ "${MASTO}" == true ]]; then
         mastodon_config

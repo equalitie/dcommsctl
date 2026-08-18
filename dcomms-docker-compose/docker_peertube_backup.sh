@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -oxeu pipefail
+set -oeu pipefail
 
 final_dir="$BACKUP_ROOT/peertube/$BACKUP_ID"
 work_dir="$final_dir.partial"
@@ -37,10 +37,29 @@ mkdir -p "$work_dir"
 
 bash ./dcomms_compose.sh stop peertube-back
 
-# sleep 1
+bash ./dcomms_compose.sh exec -T peertube-postgres sh -c \
+  'PGPASSWORD=$POSTGRES_PASSWORD psql \
+    -U "$POSTGRES_USER" \
+    -d "$POSTGRES_DB" \
+    -v ON_ERROR_STOP=1' \
+  > /dev/null <<'SQL'
+DO $$
+BEGIN
+  WHILE EXISTS (
+    SELECT 1
+    FROM pg_stat_activity
+    WHERE datname = current_database()
+      AND pid <> pg_backend_pid()
+      AND backend_type = 'client backend'
+  ) LOOP
+    PERFORM pg_sleep(1);
+  END LOOP;
+END
+$$;
+SQL
 
 bash ./dcomms_compose.sh exec -T peertube-postgres sh -c \
-  'PG_PASSWORD=$POSTGRES_PASSWORD pg_dumpall 2>/dev/null \
+  'PGPASSWORD=$POSTGRES_PASSWORD pg_dumpall 2>/dev/null \
     -U $POSTGRES_USER \
     -l $POSTGRES_DB' | \
   gzip > "$work_dir/pgump.sql.gz"

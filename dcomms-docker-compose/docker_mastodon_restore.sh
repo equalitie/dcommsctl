@@ -1,0 +1,44 @@
+#!/bin/bash
+
+set -xoeu pipefail
+
+backup_dir="$BACKUP_ROOT/mastodon/$BACKUP_ID"
+completed=0
+
+source ./helpers.sh
+
+cleanup() {
+  status=$?
+
+  sh ./dcomms_compose.sh start mastodon-sidekiq 2>/dev/null
+
+  exit "$status"
+}
+
+trap cleanup EXIT
+
+bash ./dcomms_compose.sh stop mastodon-sidekiq
+
+bash ./dcomms_compose.sh exec -T mastodon-db sh -c \
+  'PGPASSWORD=$DB_PASSWORD dropdb \
+    --force \
+    -U "$DB_USER" \
+    "$DB_NAME"'
+
+gunzip -c "$backup_dir/pgump.sql.gz" | \
+  bash ./dcomms_compose.sh exec -T mastodon-db sh -c \
+    'PGPASSWORD=$DB_PASSWORD psql \
+      -U "$DB_USER" \
+      -d postgres' > /dev/null
+
+bash ./dcomms_compose.sh exec -T mastodon-redis \
+  redis-cli FLUSHALL
+
+docker run --rm \
+  --volumes-from "$(bash ./dcomms_compose.sh ps -aq mastodon-sidekiq)" \
+  -v "$backup_dir:/backup:ro" \
+  alpine:latest \
+  sh -c 'rm -rf /mastodon/system/public/* /mastodon/system/public/.[!.]* /mastodon/system/public/..?* &&
+    tar xzf /backup/content.tar.gz -C /'
+
+completed=1
