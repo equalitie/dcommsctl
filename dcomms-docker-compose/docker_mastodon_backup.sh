@@ -15,7 +15,7 @@ source ./helpers.sh
 cleanup() {
   status=$?
 
-  sh ./dcomms_compose.sh start mastodon-sidekiq 2>/dev/null
+  ./dcomms_compose.sh start mastodon-sidekiq 2>/dev/null
 
   if [ "$completed" -ne 1 ] && [ -n "${work_dir:-}" ] && [ -d "$work_dir" ]; then
     rm -rf -- "$work_dir"
@@ -37,23 +37,23 @@ rm -rf "$final_dir"
 
 mkdir -p "$work_dir"
 
-bash ./dcomms_compose.sh stop mastodon-sidekiq
+./dcomms_compose.sh stop mastodon-sidekiq
 
 # sleep 1
 
-bash ./dcomms_compose.sh exec -T mastodon-db sh -c \
+./dcomms_compose.sh exec -T mastodon-db sh -c \
   'PGPASSWORD=$DB_PASSWORD pg_dumpall 2>/dev/null \
     -U $DB_USER \
     -l $DB_NAME' | \
   gzip > "$work_dir/pgdump.sql.gz"
 
-bash ./dcomms_compose.sh exec -T mastodon-redis sh -c \
+./dcomms_compose.sh exec -T mastodon-redis sh -c \
   'redis-cli SAVE' | \
   gzip > "$work_dir/redis.rdb.gz"
 
 docker run --rm \
   --user "$(id -u):$(id -g)" \
-  --volumes-from $(bash ./dcomms_compose.sh ps -aq mastodon-sidekiq) \
+  --volumes-from $(./dcomms_compose.sh ps -aq mastodon-sidekiq) \
   -v "$work_dir:/backup" \
   alpine:latest \
   tar czf /backup/content.tar.gz /mastodon/public/system

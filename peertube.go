@@ -42,7 +42,7 @@ func initPeertubeConf(ctx context.Context) (ApplicationConfig, error) {
 
 func peertubePostInstall(ctx context.Context, app *GlobalState) error {
 	pass := "test_pass"
-	cmd := exec.CommandContext(ctx, "bash", "./peertube_postinstall.sh")
+	cmd := exec.CommandContext(ctx, "./peertube_postinstall.sh")
 	cmd.Dir = app.systemCfg.DcommsConfFilesDir
 	cmd.Env = []string{
 		"PEERTUBE_ADMIN_PASS=" + pass,
@@ -66,7 +66,7 @@ func peertubeDockerBackup(ctx context.Context, app *GlobalState) error {
 	// FIXME: we need to store this somewhere and generate it dynamically
 	backupID := "tmp1"
 
-	cmd := exec.CommandContext(ctx, "bash", "./docker_peertube_backup.sh")
+	cmd := exec.CommandContext(ctx, "./docker_peertube_backup.sh")
 	cmd.Dir = app.systemCfg.DcommsConfFilesDir
 	cmd.Env = []string{
 		"BACKUP_ROOT=" + backupRoot,
@@ -89,7 +89,7 @@ func peertubeDockerRestore(ctx context.Context, app *GlobalState, backupID strin
 	// FIXME: figure out where we store that
 	backupRoot := "./.backup"
 
-	cmd := exec.CommandContext(ctx, "bash", "./docker_peertube_restore.sh")
+	cmd := exec.CommandContext(ctx, "./docker_peertube_restore.sh")
 	cmd.Dir = app.systemCfg.DcommsConfFilesDir
 	cmd.Env = []string{
 		"BACKUP_ROOT=" + backupRoot,

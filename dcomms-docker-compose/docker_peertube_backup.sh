@@ -13,7 +13,7 @@ cleanup() {
   status=$?
 
   # NOTE: can I just run this and not store if containers was stopped
-  sh ./dcomms_compose.sh start peertube-back 2>/dev/null
+  ./dcomms_compose.sh start peertube-back 2>/dev/null
 
   if [ "$completed" -ne 1 ] && [ -n "${work_dir:-}" ] && [ -d "$work_dir" ]; then
     rm -rf -- "$work_dir"
@@ -35,9 +35,9 @@ rm -rf "$final_dir"
 
 mkdir -p "$work_dir"
 
-bash ./dcomms_compose.sh stop peertube-back
+./dcomms_compose.sh stop peertube-back
 
-bash ./dcomms_compose.sh exec -T peertube-postgres sh -c \
+./dcomms_compose.sh exec -T peertube-postgres sh -c \
   'PGPASSWORD=$POSTGRES_PASSWORD psql \
     -U "$POSTGRES_USER" \
     -d "$POSTGRES_DB" \
@@ -58,20 +58,20 @@ END
 $$;
 SQL
 
-bash ./dcomms_compose.sh exec -T peertube-postgres sh -c \
+./dcomms_compose.sh exec -T peertube-postgres sh -c \
   'PGPASSWORD=$POSTGRES_PASSWORD pg_dumpall 2>/dev/null \
     -U $POSTGRES_USER \
     -l $POSTGRES_DB' | \
   gzip > "$work_dir/pgump.sql.gz"
 
 # FIXME: figure out auth, works for default setup with an empty password
-bash ./dcomms_compose.sh exec -T peertube-redis sh -c \
+./dcomms_compose.sh exec -T peertube-redis sh -c \
   'redis-cli SAVE' | \
   gzip > "$work_dir/redis.rdb.gz"
 
 docker run --rm \
   --user "$(id -u):$(id -g)" \
-  --volumes-from $(bash ./dcomms_compose.sh ps -aq peertube-back) \
+  --volumes-from $(./dcomms_compose.sh ps -aq peertube-back) \
   -v "$work_dir:/backup" \
   alpine:latest \
   tar czf /backup/content.tar.gz /data

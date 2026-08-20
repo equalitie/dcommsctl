@@ -66,7 +66,7 @@ func mergeEnvVars(base []string, newValues []string) ([]string, error) {
 	return nil, nil
 }
 
-func scriptInstall(ctx context.Context, t DeploymentTargetInfo) error {
+func scriptInstall(ctx context.Context, app *GlobalState, t DeploymentTargetInfo) error {
 	choices := []string{}
 
 	if t.PeertubeEnabled {
@@ -106,7 +106,7 @@ func scriptInstall(ctx context.Context, t DeploymentTargetInfo) error {
 			return fmt.Errorf("install script: %s", err)
 		}
 	} else {
-		preinstallCmd := exec.Command("bash", "./debian_setup.sh")
+		preinstallCmd := exec.Command("./debian_setup.sh")
 		output, err := preinstallCmd.CombinedOutput()
 		fmt.Println("--- Running pre-req install script ---")
 
@@ -118,7 +118,7 @@ func scriptInstall(ctx context.Context, t DeploymentTargetInfo) error {
 		}
 		fmt.Println("--- End of pre-req install script  ---")
 
-		installCmd := exec.Command("bash", pathToDCommsInstall)
+		installCmd := exec.Command(pathToDCommsInstall)
 
 		installCmd.Env = []string{
 			"CHOICES=" + strings.Join(choices, " "),
@@ -132,6 +132,13 @@ func scriptInstall(ctx context.Context, t DeploymentTargetInfo) error {
 			return fmt.Errorf("install script: %s", err)
 		}
 
+		if t.MastodonEnabled {
+			mastodonPostInstall(ctx, app)
+		}
+
+		if t.PeertubeEnabled {
+			peertubePostInstall(ctx, app)
+		}
 	}
 
 	return nil

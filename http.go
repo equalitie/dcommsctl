@@ -188,7 +188,7 @@ func httpPostRunStartupScript(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		cmd := exec.CommandContext(ctx, "bash", "dcomms_compose.sh", "up -d")
+		cmd := exec.CommandContext(ctx, "./dcomms_compose.sh", "up -d")
 		cmd.Dir = pathToDComms
 
 		scriptOut, err := cmd.CombinedOutput()
@@ -222,7 +222,7 @@ func httpPostRunStopScript(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		cmd := exec.CommandContext(ctx, "bash", "dcomms_compose.sh", "down")
+		cmd := exec.CommandContext(ctx, "./dcomms_compose.sh", "down")
 		cmd.Dir = pathToDComms
 
 		scriptOut, err := cmd.CombinedOutput()
@@ -355,7 +355,7 @@ func httpPostAddApplication(w http.ResponseWriter, r *http.Request) {
 		t.PeertubeEnabled = true
 	}
 
-	if err := scriptInstall(r.Context(), t); err != nil {
+	if err := scriptInstall(r.Context(), app, t); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
 		return
@@ -373,7 +373,7 @@ func httpPostRunInstallScript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := scriptInstall(r.Context(), t); err != nil {
+	if err := scriptInstall(r.Context(), app, t); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
 		return
