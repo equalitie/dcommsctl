@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
@@ -534,7 +535,31 @@ func getApplicationFromRequest(app *GlobalState, r *http.Request) (ApplicationCo
 	}
 }
 
+func crashLogInit() {
+	name := fmt.Sprintf(
+		"crash-%s-pid-%d.log",
+		time.Now().UTC().Format("20060102T150405Z"),
+		os.Getpid(),
+	)
+
+	f, err := os.OpenFile(
+		filepath.Join("./", name),
+		os.O_CREATE|os.O_WRONLY|os.O_EXCL,
+		0o600,
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	defer f.Close()
+
+	if err := debug.SetCrashOutput(f, debug.CrashOptions{}); err != nil {
+		panic(err)
+	}
+}
+
 func main() {
+	crashLogInit()
 	serverError := make(chan error, 1)
 	stop := make(chan os.Signal, 1)
 	app := NewGlobalState()
