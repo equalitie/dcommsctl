@@ -2,6 +2,7 @@
 
 set -oeu pipefail
 
+# FIXME: pass instance name
 final_dir="$BACKUP_ROOT/peertube/$BACKUP_ID"
 work_dir="$final_dir.partial"
 completed=0

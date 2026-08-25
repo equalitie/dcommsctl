@@ -82,9 +82,10 @@ type DeploymentTargetInfo struct {
 type GlobalState struct {
 	conn DeploymentTargetInfo
 	// int as key for persistent IDs
-	targets   map[int]DeploymentTargetInfo
-	ctx       context.Context
-	systemCfg SystemConfig
+	targets     map[int]DeploymentTargetInfo
+	ctx         context.Context
+	systemCfg   SystemConfig
+	jobsManager JobManager
 }
 
 func NewGlobalState() *GlobalState {
@@ -261,7 +262,6 @@ func crashLogInit() {
 }
 
 func main() {
-	crashLogInit()
 	serverError := make(chan error, 1)
 	stop := make(chan os.Signal, 1)
 	app := NewGlobalState()
@@ -270,11 +270,26 @@ func main() {
 	tmpCtx := context.Background()
 	rootContext := context.WithValue(tmpCtx, "app", app)
 
+	// rootContext, stop = signal.NotifyContext(
+	// 	rootContext,
+	// 	os.Interrupt,
+	// 	syscall.SIGTERM,
+	// )
+	// defer stop()
 	app.ctx = rootContext
 	app.systemCfg.DcommsConfFilesDir = "./dcomms-docker-compose"
 	app.systemCfg.Applications = make(map[string]ApplicationConfig)
 
-	// FIXME: don't like panic
+	jRPCServer := NewJRPCServer()
+	jRPCServer.Logger = log.Default()
+
+	jRPCServer.Register("install", app.rpcCreateApp)
+	jRPCServer.Register("start", app.rpcStartApp)
+	jRPCServer.Register("stop", app.rpcStartApp)
+	jRPCServer.Register("backup", app.rpcStartApp)
+	jRPCServer.Register("restore", app.rpcStartApp)
+
+	// FIXME: these are probably not needed anymore
 	peerTubeConf, err := initPeertubeConf(rootContext)
 	if err != nil {
 		panic(err)
@@ -287,24 +302,10 @@ func main() {
 	app.systemCfg.Applications[mastodonConf.Name] = mastodonConf
 
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
-	fileServer := http.FileServer(http.Dir("./static"))
 
 	mux := http.NewServeMux()
 
-	mux.Handle("GET /", fileServer)
-	mux.HandleFunc("GET /target/{target}/info", httpGetInfo)
-	mux.HandleFunc("POST /target/create", httpPostTargetCreate)
-	mux.HandleFunc("GET /target/list", httpGetTargets)
-	mux.HandleFunc("POST /target/{target}/update", httpPostTargetUpdate)
-	mux.HandleFunc("GET /target/{target}/env/{id}", httpGetEnv)
-	mux.HandleFunc("POST /target/{target}/install", httpPostRunInstallScript)
-	mux.HandleFunc("POST /target/{target}/application/add/{application}", httpPostAddApplication)
-	mux.HandleFunc("POST /target/{target}/backup/{application}", httpPostRunBackupScript)
-	mux.HandleFunc("POST /target/{target}/restore/{application}", httpPostRunRestoreScript)
-	mux.HandleFunc("POST /target/{target}/start", httpPostRunStartupScript)
-	mux.HandleFunc("POST /target/{target}/stop", httpPostRunStopScript)
-	mux.HandleFunc("POST /target/{target}/check", httpPostRunCheckScript)
-	mux.HandleFunc("POST /target/{target}/panic/", httpPostPanic)
+	mux.Handle("/ws", jRPCServer.Handler())
 
 	addr := os.Getenv("WEBHOST_PORT")
 
@@ -315,9 +316,9 @@ func main() {
 	server := &http.Server{
 		Addr:         addr,
 		Handler:      mux,
-		ReadTimeout:  120 * time.Second,
-		WriteTimeout: 120 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 5 * time.Second,
+		IdleTimeout:  5 * time.Second,
 		BaseContext:  func(net.Listener) context.Context { return rootContext },
 	}
 	go func() {

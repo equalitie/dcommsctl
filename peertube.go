@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
-	// "github.com/compose-spec/compose-go/v2/cli"
+	"path"
+	"text/template"
 )
 
 func initPeertubeConf(ctx context.Context) (ApplicationConfig, error) {
@@ -41,11 +43,15 @@ func initPeertubeConf(ctx context.Context) (ApplicationConfig, error) {
 }
 
 func peertubePostInstall(ctx context.Context, app *GlobalState) error {
+	appDir := ""
+	domain := ""
 	pass := "test_pass"
-	cmd := exec.CommandContext(ctx, "./peertube_postinstall.sh")
+	cmd := exec.CommandContext(ctx, "./peertube_install.sh")
 	cmd.Dir = app.systemCfg.DcommsConfFilesDir
 	cmd.Env = []string{
+		"APP_DIR=" + appDir,
 		"PEERTUBE_ADMIN_PASS=" + pass,
+		"DWEB_DOMAIN=" + domain,
 	}
 
 	output, err := cmd.CombinedOutput()
@@ -103,6 +109,40 @@ func peertubeDockerRestore(ctx context.Context, app *GlobalState, backupID strin
 	if err != nil {
 		return err
 	}
+
+	return nil
+}
+
+type AdminConfig struct {
+	Email string
+}
+
+type DbConfig struct {
+	Password string
+}
+
+type PeertubeConfig struct {
+	PortOut  int
+	PortOut2 int
+	Db       DbConfig
+}
+
+func peertubeCreateInstance(ctx context.Context) error {
+	tmpl, err := template.ParseFiles("./conf_tmpl/peertube/docker-compose.tmpl.yml")
+	if err != nil {
+		return err
+	}
+
+	pathToApp, err := appCreate(ctx, "")
+
+	composeFile, err := os.OpenFile(path.Join(pathToApp, "docker-compose.yml"), os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return err
+	}
+
+	data := PeertubeConfig{}
+
+	tmpl.Execute(composeFile, &data)
 
 	return nil
 }

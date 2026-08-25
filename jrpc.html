@@ -1,0 +1,67 @@
+<html>
+
+    <head>
+
+    </head>
+
+    <body>
+        <script>
+            const ws = new WebSocket('ws://localhost:8080/ws');
+
+            ws.onopen = () => {
+              document.getElementById('result').textContent = 'connected';
+            callRpc();
+            };
+
+            ws.onmessage = (event) => {
+              const data = JSON.parse(event.data);
+              document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+            };
+
+            ws.onerror = (err) => {
+              document.getElementById('result').textContent = err;
+            };
+
+            function callRpc() {
+            }
+
+            function sendCreate() {
+              ws.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'start',
+                params: { id: 0 },
+                id: 1
+              }));
+            }
+            function sendStart() {
+              ws.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'start',
+                params: { id: 0 },
+                id: 1
+              }));
+            }
+            function sendStop() {
+              ws.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'stop',
+                params: { id: 0 },
+                id: 1
+              }));
+            }
+
+        </script>
+
+
+        <div id="result"></div>
+
+        <div>
+            <button onClick="sendCreate()">Create</button>
+            <button onClick="sendStart()">Start</button>
+            <button onClick="sendStop()">Stop</button>
+        </div>
+
+
+    </body>
+
+</html>
