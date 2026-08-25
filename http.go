@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os/exec"
+	"strconv"
 
 	dockerClient "github.com/moby/moby/client"
 )
@@ -32,10 +33,6 @@ func httpPostPanic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO: remove all volumes
-}
-
-func httPostTestInstallation(app GlobalState, w http.ResponseWriter, r *http.Request) {
-	// TODO: implement a check script to see if we're ready to install Dcomms on deployment target
 }
 
 func httpGetTargets(w http.ResponseWriter, r *http.Request) {
@@ -399,4 +396,29 @@ func httpGetEnv(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write(env)
+}
+
+func getTargetFromRequest(app *GlobalState, r *http.Request) (DeploymentTargetInfo, error) {
+	target, err := strconv.Atoi(r.PathValue("target"))
+	if err != nil {
+		return DeploymentTargetInfo{}, fmt.Errorf("Failed to parse target id: %s", err)
+	}
+
+	t, found := app.targets[target]
+
+	if !found {
+		return DeploymentTargetInfo{}, fmt.Errorf("Target not found: %d", target)
+	}
+
+	return t, nil
+}
+
+func getApplicationFromRequest(app *GlobalState, r *http.Request) (ApplicationConfig, error) {
+	applicationID := r.PathValue("application")
+
+	if s, found := app.systemCfg.Applications[applicationID]; found {
+		return s, nil
+	} else {
+		return ApplicationConfig{}, fmt.Errorf("application not found: %s", applicationID)
+	}
 }
