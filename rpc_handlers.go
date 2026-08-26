@@ -3,72 +3,84 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 )
 
-type CreateAppArgs struct {
+type InstallInstanceArgs struct {
 	AppName    string `json:"name"`
 	DomainName string `json:"domain"`
 }
 
-type CreateAppResult struct {
+type InstallInstanceResult struct {
 	JobID      string `json:"job_id"`
 	ID         string `json:"id"`
 	AdminLogin string `json:"admin_login"`
 	AdminPass  string `json:"admin_pass"`
 }
 
-func (app *GlobalState) rpcCreateApp(ctx context.Context, args CreateAppArgs) (CreateAppResult, error) {
-	// FIXME:
-	// t := DeploymentTargetInfo{}
+func jobLockFile(lockPath string) *os.File {
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
 
+	return f
+}
+
+func (app *GlobalState) rpcInstallInstance(ctx context.Context, args InstallInstanceArgs) (InstallInstanceResult, error) {
 	applicationID := args.AppName
 	_, found := app.systemCfg.Applications[applicationID]
 
 	if !found {
-		return CreateAppResult{}, fmt.Errorf("We do not support this type of application: %s", applicationID)
+		return InstallInstanceResult{}, fmt.Errorf("We do not support this type of application: %s", applicationID)
 	}
 
-	// app.targets[t.ID] = t
-
-	appID := applicationID + "-111"
-	appDir := path.Join("./.apps", appID)
+	jobType := "install"
 
 	switch applicationID {
 	case "peertube":
 		{
-			composePrj, err := composeChangePorts(ctx, path.Join(app.systemCfg.DcommsConfFilesDir, "/conf/compose/peertube.docker-compose.yml"), map[string]string{
-				"1935": "1936",
-				"9010": "9011",
-			})
+			instanceDir, err := peertubeCreateInstance(ctx, app.systemCfg.InstancesDir)
 			if err != nil {
-				return CreateAppResult{}, nil
+				return InstallInstanceResult{}, err
 			}
 
-			if err := composeStore(ctx, composePrj, path.Join(appDir, "docker-compose.yml")); err != nil {
-				return CreateAppResult{}, nil
+			instanceID := filepath.Base(instanceDir)
+
+			lockFile := jobLockFile(path.Join(instanceDir, "."+jobType+".lock"))
+
+			if lockFile == nil {
+				return InstallInstanceResult{}, fmt.Errorf("The job is in progress")
 			}
+			defer lockFile.Close()
 
 			pass := "test_pass"
 			cmd := exec.CommandContext(ctx, "./peertube_install.sh")
-			cmd.Dir = app.systemCfg.DcommsConfFilesDir
+			cmd.Dir = instanceDir
 			cmd.Env = []string{
 				"DCOMMS_DIR=" + app.systemCfg.DcommsConfFilesDir,
-				"APP_DIR=" + appDir,
+				"APP_DIR=" + instanceDir,
 				"PEERTUBE_ADMIN_PASS=" + pass,
 				"DWEB_DOMAIN=" + args.DomainName,
 			}
 
-			app.jobsManager.startExec(ctx, "dcomms", "create", cmd)
-			return CreateAppResult{
-				ID:         appID,
+			if err := app.jobsManager.startExec(ctx, instanceDir, "install", cmd); err != nil {
+				return InstallInstanceResult{}, err
+			}
+
+			return InstallInstanceResult{
+				JobID:      "install",
+				ID:         instanceID,
 				AdminLogin: "root",
 				AdminPass:  pass,
 			}, nil
 		}
 	}
-	return CreateAppResult{}, nil
+	return InstallInstanceResult{}, nil
 }
 
 type RemoveAppArgs struct {
@@ -91,13 +103,6 @@ type StartAppResult struct {
 }
 
 func (app *GlobalState) rpcStartApp(ctx context.Context, args StartAppArgs) (string, error) {
-	cmd := exec.CommandContext(ctx, "./dcomms_compose.sh", "up -d")
-	cmd.Dir = app.systemCfg.DcommsConfFilesDir
-
-	if err := app.jobsManager.startExec(ctx, args.InstanceName, "stop", cmd); err != nil {
-		return "failed to start app", err
-	}
-
 	return "", nil
 }
 
@@ -110,12 +115,5 @@ type StopAppResult struct {
 }
 
 func (app *GlobalState) rpcStopApp(ctx context.Context, args StopAppArgs) (string, error) {
-	cmd := exec.CommandContext(ctx, "./dcomms_compose.sh", "up -d")
-	cmd.Dir = app.systemCfg.DcommsConfFilesDir
-
-	if err := app.jobsManager.startExec(ctx, args.InstanceName, "stop", cmd); err != nil {
-		return "failed to start app", err
-	}
-
 	return "", nil
 }

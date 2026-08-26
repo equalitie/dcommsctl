@@ -11,6 +11,79 @@ import (
 
 // this is a file for handling jobs: whatever client requested us to do and we essentially run it in async mode
 
+var instanceNames = []string{
+	"aardwolf",
+	"axolotl",
+	"babirusa",
+	"bilby",
+	"binturong",
+	"bongo",
+	"caracal",
+	"coati",
+	"dhole",
+	"dikdik",
+	"dugong",
+	"echidna",
+	"fossa",
+	"gerenuk",
+	"genet",
+	"goura",
+	"hirola",
+	"indri",
+	"jerboa",
+	"kakapo",
+	"kinkajou",
+	"klipspringer",
+	"kudu",
+	"linsang",
+	"margay",
+	"markhor",
+	"numbat",
+	"okapi",
+	"onager",
+	"olingo",
+	"pademelon",
+	"pangolin",
+	"pika",
+	"quokka",
+	"quoll",
+	"saiga",
+	"serval",
+	"solenodon",
+	"takin",
+	"tamandua",
+	"tarsier",
+	"tenrec",
+	"tuatara",
+	"uakari",
+	"vaquita",
+	"wallaroo",
+	"xerus",
+	"yapok",
+	"zorilla",
+	"agouti",
+	"anoa",
+	"bharal",
+	"cacomistle",
+	"cuscus",
+	"galago",
+	"iriomote",
+	"jentink",
+	"kiang",
+	"kouprey",
+	"manul",
+	"muntjac",
+	"nyala",
+	"oryx",
+	"potto",
+	"sifaka",
+	"tahr",
+	"vicuna",
+	"viscacha",
+	"zebu",
+	"zokor",
+}
+
 type JobID string
 
 type JobRecord struct {
@@ -40,10 +113,8 @@ func (m *JobManager) run(ctx context.Context, rec *JobRecord, w io.Writer, cmd *
 	return nil
 }
 
-func (m *JobManager) startExec(ctx context.Context, instanceName, jobName string, cmd *exec.Cmd) error {
-	id := "111"
-
-	partialPath := filepath.Join(m.path, id+".partial.log")
+func (m *JobManager) startExec(ctx context.Context, instancePath string, jobName string, cmd *exec.Cmd) error {
+	partialPath := filepath.Join(instancePath, "jobs", jobName+".partial.log")
 
 	f, err := os.OpenFile(partialPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
@@ -63,8 +134,8 @@ func (m *JobManager) startExec(ctx context.Context, instanceName, jobName string
 	return nil
 }
 
-func (m *JobManager) log(jobID string) {
-	partialPath := filepath.Join(m.path, jobID+".partial.log")
+func (m *JobManager) log(instancePath string, jobName string) {
+	partialPath := filepath.Join(instancePath, "jobs", jobName+".partial.log")
 
 	_, err := os.OpenFile(partialPath, os.O_RDONLY, 0o644)
 	if err != nil {

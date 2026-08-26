@@ -28,8 +28,8 @@
             function sendCreate() {
               ws.send(JSON.stringify({
                 jsonrpc: '2.0',
-                method: 'start',
-                params: { id: 0 },
+                method: 'install',
+                params: { name: "peertube" },
                 id: 1
               }));
             }

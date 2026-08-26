@@ -122,27 +122,37 @@ type DbConfig struct {
 }
 
 type PeertubeConfig struct {
+	Domain   string
 	PortOut  int
 	PortOut2 int
 	Db       DbConfig
 }
 
-func peertubeCreateInstance(ctx context.Context) error {
+func peertubeCreateInstance(ctx context.Context, instancesDir string) (string, error) {
 	tmpl, err := template.ParseFiles("./conf_tmpl/peertube/docker-compose.tmpl.yml")
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	pathToApp, err := appCreate(ctx, "")
+	pathToInst, err := instanceCreate(ctx, instancesDir, "peertube")
 
-	composeFile, err := os.OpenFile(path.Join(pathToApp, "docker-compose.yml"), os.O_CREATE|os.O_EXCL, 0o644)
+	composeFile, err := os.OpenFile(path.Join(pathToInst, "docker-compose.yml"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	data := PeertubeConfig{}
+	data := PeertubeConfig{
+		Domain:   "peertube.",
+		PortOut:  1935,
+		PortOut2: 9090,
+		Db: DbConfig{
+			Password: "",
+		},
+	}
 
-	tmpl.Execute(composeFile, &data)
+	if err := tmpl.Execute(composeFile, &data); err != nil {
+		return "", err
+	}
 
-	return nil
+	return pathToInst, nil
 }

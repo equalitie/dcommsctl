@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -33,102 +32,6 @@ func httpPostPanic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO: remove all volumes
-}
-
-func httpGetTargets(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(*GlobalState)
-	out, err := json.Marshal(app.targets)
-	if err != nil {
-		fmt.Println("Failed to marshal targets into json:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.Write(out)
-}
-
-func httpPostTargetCreate(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(*GlobalState)
-	maxId := 0
-
-	// for now we just pick the biggest ID
-	for id := range app.targets {
-		if id > maxId {
-			maxId = id
-		}
-	}
-
-	backend := r.FormValue("backend")
-	containerBackend := ContainerBackendType(ContainerBackendDocker)
-
-	if backend == "podman" {
-		containerBackend = ContainerBackendPodman
-	}
-
-	// FIXME: properly process form values
-	t := DeploymentTargetInfo{
-		ID:               maxId + 1,
-		Remote:           false,
-		Host:             r.FormValue("host"),
-		User:             r.FormValue("username"),
-		Port:             r.FormValue("port"),
-		Domain:           r.FormValue("domainname"),
-		ContainerBackend: containerBackend,
-		MatrixEnabled:    r.FormValue("matrix_on") == "on",
-		CenoEnabled:      r.FormValue("ceno_on") == "on",
-		PeertubeEnabled:  r.FormValue("peertube_on") == "on",
-		MastodonEnabled:  r.FormValue("mastodon_on") == "on",
-		MauEnabled:       r.FormValue("mau_on") == "on",
-	}
-
-	app.targets[maxId+1] = t
-
-	targetsSave(app)
-
-	fmt.Println("Target created. ID:", maxId+1)
-
-	out, err := json.Marshal(t)
-	if err != nil {
-		fmt.Println("Failed to marshal target into json:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.Write(out)
-}
-
-func httpPostTargetUpdate(w http.ResponseWriter, r *http.Request) {
-	app := r.Context().Value("app").(*GlobalState)
-	t, err := getTargetFromRequest(app, r)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
-	}
-
-	// FIXME: properly process form values
-	t.Remote = false
-	t.Host = r.FormValue("host")
-	t.User = r.FormValue("username")
-	t.Port = r.FormValue("port")
-	t.Domain = r.FormValue("domainname")
-	t.MatrixEnabled = r.FormValue("matrix_on") == "on"
-	t.CenoEnabled = r.FormValue("ceno_on") == "on"
-	t.PeertubeEnabled = r.FormValue("peertube_on") == "on"
-	t.MastodonEnabled = r.FormValue("mastodon_on") == "on"
-	t.MauEnabled = r.FormValue("mau_on") == "on"
-
-	app.targets[t.ID] = t
-
-	targetsSave(app)
-
-	fmt.Println("Target updated. ID:", t.ID)
-
-	out, err := json.Marshal(t)
-	if err != nil {
-		fmt.Println("Failed to marshal target into json:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.Write(out)
 }
 
 func httpPostRunCheckScript(w http.ResponseWriter, r *http.Request) {
