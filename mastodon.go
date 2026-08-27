@@ -7,39 +7,6 @@ import (
 	// "github.com/compose-spec/compose-go/v2/cli"
 )
 
-func initMastodonConf(ctx context.Context) (ApplicationConfig, error) {
-	app := ctx.Value("app").(*GlobalState)
-	composeFilePath := app.systemCfg.DcommsConfFilesDir + "/conf/compose/mastodon.docker-compose.yml"
-
-	cfg := ApplicationConfig{
-		Name:           "mastodon",
-		Started:        false,
-		ConfigFilePath: app.systemCfg.DcommsConfFilesDir + "/conf/mastodon/env.production",
-		ComposePath:    composeFilePath,
-	}
-
-	// opt, err := cli.NewProjectOptions(
-	// 	[]string{composeFilePath},
-	// 	cli.WithOsEnv,
-	// 	cli.WithDotEnv,
-	// )
-	// if err != nil {
-	// 	return ApplicationConfig{}, fmt.Errorf("Composer parser options err: %s", err)
-	// }
-
-	// prj, err := opt.LoadProject(ctx)
-	// if err != nil {
-	// 	return ApplicationConfig{}, err
-	// }
-
-	// srvs, err := prj.GetServices()
-	// if err != nil {
-	// 	return ApplicationConfig{}, nil
-	// }
-
-	return cfg, nil
-}
-
 func mastodonPostInstall(ctx context.Context, app *GlobalState) error {
 	pass := "test_pass"
 	cmd := exec.CommandContext(ctx, "./mastodon_postinstall.sh")

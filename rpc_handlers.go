@@ -21,25 +21,10 @@ type InstallInstanceResult struct {
 	AdminPass  string `json:"admin_pass"`
 }
 
-func jobLockFile(lockPath string) *os.File {
-	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL, 0o644)
-	if err != nil {
-		fmt.Println(err)
-		return nil
-	}
-
-	return f
-}
-
-func (app *GlobalState) rpcInstallInstance(ctx context.Context, args InstallInstanceArgs) (InstallInstanceResult, error) {
+func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInstanceArgs) (InstallInstanceResult, error) {
 	applicationID := args.AppName
-	_, found := app.systemCfg.Applications[applicationID]
-
-	if !found {
-		return InstallInstanceResult{}, fmt.Errorf("We do not support this type of application: %s", applicationID)
-	}
-
 	jobType := "install"
+	jobID := jobID(jobType)
 
 	switch applicationID {
 	case "peertube":
@@ -69,12 +54,12 @@ func (app *GlobalState) rpcInstallInstance(ctx context.Context, args InstallInst
 				"DWEB_DOMAIN=" + args.DomainName,
 			}
 
-			if err := app.jobsManager.startExec(ctx, instanceDir, "install", cmd); err != nil {
+			if err := app.jobsManager.startExec(ctx, instanceDir, jobID, cmd); err != nil {
 				return InstallInstanceResult{}, err
 			}
 
 			return InstallInstanceResult{
-				JobID:      "install",
+				JobID:      jobID,
 				ID:         instanceID,
 				AdminLogin: "root",
 				AdminPass:  pass,
@@ -87,34 +72,215 @@ func (app *GlobalState) rpcInstallInstance(ctx context.Context, args InstallInst
 type RemoveAppArgs struct {
 	ID string `json:"id"`
 }
-type RemoveAppResult struct {
+type InstanceUninstallResult struct {
 	JobID string `json:"job_id"`
 }
 
-func (app *GlobalState) rpcRemoveApp(ctx context.Context, args RemoveAppArgs) (RemoveAppResult, error) {
-	return RemoveAppResult{}, nil
+func (app *GlobalState) rpcInstanceUninstall(ctx context.Context, args RemoveAppArgs) (InstanceUninstallResult, error) {
+	jobType := "uninstall"
+
+	jobID := jobID(jobType)
+
+	instanceID := args.ID
+
+	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
+	lockFileName := "." + jobType + ".lock"
+
+	lockFile := jobLockFile(path.Join(instanceDir, lockFileName))
+
+	if lockFile == nil {
+		return InstanceUninstallResult{}, fmt.Errorf("The job is in progress")
+	}
+	defer lockFile.Close()
+
+	cmd := exec.CommandContext(ctx, "docker compose down")
+	cmd.Dir = instanceDir
+	cmd.Env = []string{
+		"LOCK_FILE=" + lockFileName,
+		"APP_DIR=" + instanceDir,
+	}
+
+	if err := app.jobsManager.startExec(ctx, instanceDir, jobID, cmd); err != nil {
+		return InstanceUninstallResult{}, err
+	}
+
+	return InstanceUninstallResult{
+		JobID: jobID,
+	}, nil
 }
 
-type StartAppArgs struct {
+type InstanceStartArgs struct {
 	InstanceName string `json:"id"`
 }
 
-type StartAppResult struct {
+type InstanceStartResult struct {
 	JobID string `json:"job_id"`
 }
 
-func (app *GlobalState) rpcStartApp(ctx context.Context, args StartAppArgs) (string, error) {
-	return "", nil
+func (app *GlobalState) rpcInstanceStart(ctx context.Context, args InstanceStartArgs) (InstanceStartResult, error) {
+	jobType := "start"
+
+	jobID := jobID(jobType)
+
+	instanceID := args.InstanceName
+
+	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
+	lockFileName := "." + jobType + ".lock"
+
+	lockFile := jobLockFile(path.Join(instanceDir, lockFileName))
+
+	if lockFile == nil {
+		return InstanceStartResult{}, fmt.Errorf("The job is in progress")
+	}
+	defer lockFile.Close()
+
+	cmd := exec.CommandContext(ctx, "docker compose up -d")
+	cmd.Dir = instanceDir
+	cmd.Env = []string{
+		"LOCK_FILE=" + lockFileName,
+		"APP_DIR=" + instanceDir,
+	}
+
+	if err := app.jobsManager.startExec(ctx, instanceDir, jobID, cmd); err != nil {
+		return InstanceStartResult{}, err
+	}
+
+	return InstanceStartResult{
+		JobID: jobID,
+	}, nil
 }
 
-type StopAppArgs struct {
+type InstanceStopArgs struct {
 	InstanceName string `json:"id"`
 }
 
-type StopAppResult struct {
+type InstanceStopResult struct {
 	JobID string `json:"job_id"`
 }
 
-func (app *GlobalState) rpcStopApp(ctx context.Context, args StopAppArgs) (string, error) {
-	return "", nil
+func (app *GlobalState) rpcInstanceStop(ctx context.Context, args InstanceStopArgs) (InstanceStopResult, error) {
+	jobType := "stop"
+	jobID := jobID(jobType)
+
+	instanceID := args.InstanceName
+
+	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
+	lockFileName := "." + jobType + ".lock"
+
+	lockFile := jobLockFile(path.Join(instanceDir, lockFileName))
+
+	if lockFile == nil {
+		return InstanceStopResult{}, fmt.Errorf("The job is in progress")
+	}
+	defer lockFile.Close()
+
+	cmd := exec.CommandContext(ctx, "docker compose down")
+	cmd.Dir = instanceDir
+	cmd.Env = []string{
+		"LOCK_FILE=" + lockFileName,
+		"APP_DIR=" + instanceDir,
+	}
+
+	if err := app.jobsManager.startExec(ctx, instanceDir, jobID, cmd); err != nil {
+		return InstanceStopResult{}, err
+	}
+
+	return InstanceStopResult{
+		JobID: jobID,
+	}, nil
+}
+
+type InstanceBackupArgs struct {
+	InstanceName string `json:"id"`
+}
+
+type InstanceBackupResult struct {
+	JobID string `json:"job_id"`
+}
+
+func (app *GlobalState) rpcInstanceBackup(ctx context.Context, args InstanceBackupArgs) (InstanceBackupResult, error) {
+	jobType := "backup"
+	jobID := jobID(jobType)
+
+	instanceID := args.InstanceName
+
+	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
+	lockFileName := "." + jobType + ".lock"
+
+	lockFile := jobLockFile(path.Join(instanceDir, lockFileName))
+
+	if lockFile == nil {
+		return InstanceBackupResult{}, fmt.Errorf("The job is in progress")
+	}
+	defer lockFile.Close()
+
+	backupID := instanceID
+	backupRoot := path.Join(app.systemCfg.BackupsDir, backupID)
+
+	if err := os.MkdirAll(backupRoot, 0o700); err != nil {
+		return InstanceBackupResult{}, err
+	}
+
+	cmd := exec.CommandContext(ctx, path.Join(app.systemCfg.ScriptsDir, "peertube_backup.sh"))
+	cmd.Dir = instanceDir
+	cmd.Env = []string{
+		"BACKUP_ROOT=" + backupRoot,
+		"BACKUP_ID=" + backupID,
+		"LOCK_FILE=" + lockFileName,
+		"APP_DIR=" + instanceDir,
+	}
+	if err := app.jobsManager.startExec(ctx, instanceDir, jobID, cmd); err != nil {
+		return InstanceBackupResult{}, err
+	}
+
+	return InstanceBackupResult{
+		JobID: jobID,
+	}, nil
+}
+
+type InstanceRestoreArgs struct {
+	InstanceName string `json:"id"`
+}
+
+type InstanceRestoreResult struct {
+	JobID string `json:"job_id"`
+}
+
+func (app *GlobalState) rpcInstanceRestore(ctx context.Context, args InstanceRestoreArgs) (InstanceRestoreResult, error) {
+	jobType := "backup"
+	jobID := jobID(jobType)
+
+	instanceID := args.InstanceName
+
+	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
+	lockFileName := "." + jobType + ".lock"
+
+	lockFile := jobLockFile(path.Join(instanceDir, lockFileName))
+
+	if lockFile == nil {
+		return InstanceRestoreResult{}, fmt.Errorf("The job is in progress")
+	}
+	defer lockFile.Close()
+	backupID := instanceID
+	backupRoot := path.Join(app.systemCfg.BackupsDir, backupID)
+
+	if _, err := os.Stat(backupRoot); err != nil {
+		return InstanceRestoreResult{}, fmt.Errorf("Failed to get access to backup dir: %s", err)
+	}
+
+	cmd := exec.CommandContext(ctx, path.Join(app.systemCfg.ScriptsDir, "peertube_restore.sh"))
+	cmd.Dir = instanceDir
+	cmd.Env = []string{
+		"BACKUP_ROOT=" + backupRoot,
+		"BACKUP_ID=" + backupID,
+		"LOCK_FILE=" + lockFileName,
+		"APP_DIR=" + instanceDir,
+	}
+	if err := app.jobsManager.startExec(ctx, instanceDir, jobID, cmd); err != nil {
+		return InstanceRestoreResult{}, err
+	}
+
+	return InstanceRestoreResult{
+		JobID: jobID,
+	}, nil
 }

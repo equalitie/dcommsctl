@@ -8,7 +8,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"path"
 	"path/filepath"
 	"time"
 
@@ -260,52 +259,4 @@ func remoteOsStatus(target DeploymentTargetInfo) []byte {
 	}
 
 	return buf.Bytes()
-}
-
-func getEnv(app *GlobalState, t DeploymentTargetInfo, appID string) ([]byte, error) {
-	appCfg, found := app.systemCfg.Applications[appID]
-
-	if !found {
-		return nil, fmt.Errorf("application is not registered %s", appID)
-	}
-	var stdoutBuf bytes.Buffer
-	var out bytes.Buffer
-
-	cmd := fmt.Sprintf("podman-compose -f config %s --services", appCfg.ComposePath)
-
-	if t.Remote {
-		if err := sshExecCommand(app.ctx, t, cmd); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := execCommand(app.ctx, t, cmd); err != nil {
-			return nil, err
-		}
-	}
-
-	services := bytes.SplitSeq(stdoutBuf.Bytes(), []byte("\n"))
-
-	for serviceName := range services {
-		name := string(serviceName)
-		if name == "" {
-			continue
-		}
-
-		cmd := fmt.Sprintf("podman-compose -d -f %s exec %s", path.Join("/home", t.User, "dcomms", "setup", "conf", "compose", appCfg.ComposePath), "env")
-
-		if t.Remote {
-			if err := sshExecCommand(app.ctx, t, cmd); err != nil {
-				return nil, err
-			}
-		} else {
-			if err := execCommand(app.ctx, t, cmd); err != nil {
-				return nil, err
-			}
-		}
-
-		out.WriteString(name)
-		out.WriteString("\n==========\n\n")
-	}
-
-	return out.Bytes(), nil
 }

@@ -29,25 +29,15 @@ type NetworkRequest struct {
 
 type SystemConfig struct {
 	DcommsConfFilesDir string
+	ScriptsDir         string
 	InstancesDir       string
-	Applications       map[string]ApplicationConfig
+	BackupsDir         string
 }
 
 type BackupRestoreStep struct {
 	TmpContainerImage string
 	ServiceName       string
 	ScriptPath        string
-}
-
-type ApplicationConfig struct {
-	Name         string
-	Started      bool
-	ComposePath  string
-	BackupSteps  []BackupRestoreStep
-	RestoreSteps []BackupRestoreStep
-	// TODO: ideally this is the set of files but right know I don't know how to propely handle those
-	ConfigFilePath string
-	ContainerID    string
 }
 
 type ContainerBackendType int
@@ -175,37 +165,21 @@ func main() {
 	tmpCtx := context.Background()
 	rootContext := context.WithValue(tmpCtx, "app", app)
 
-	// rootContext, stop = signal.NotifyContext(
-	// 	rootContext,
-	// 	os.Interrupt,
-	// 	syscall.SIGTERM,
-	// )
-	// defer stop()
 	app.ctx = rootContext
 	app.systemCfg.DcommsConfFilesDir, _ = filepath.Abs("./dcomms-docker-compose")
 	app.systemCfg.InstancesDir, _ = filepath.Abs("./.instances")
-	app.systemCfg.Applications = make(map[string]ApplicationConfig)
+	app.systemCfg.BackupsDir, _ = filepath.Abs("./scripts")
+	app.systemCfg.BackupsDir, _ = filepath.Abs("./.backups")
 
 	jRPCServer := NewJRPCServer()
 	jRPCServer.Logger = log.Default()
 
-	jRPCServer.Register("install", app.rpcInstallInstance)
-	jRPCServer.Register("start", app.rpcStartApp)
-	jRPCServer.Register("stop", app.rpcStartApp)
-	jRPCServer.Register("backup", app.rpcStartApp)
-	jRPCServer.Register("restore", app.rpcStartApp)
-
-	// FIXME: these are probably not needed anymore
-	peerTubeConf, err := initPeertubeConf(rootContext)
-	if err != nil {
-		panic(err)
-	}
-	mastodonConf, err := initMastodonConf(rootContext)
-	if err != nil {
-		panic(err)
-	}
-	app.systemCfg.Applications[peerTubeConf.Name] = peerTubeConf
-	app.systemCfg.Applications[mastodonConf.Name] = mastodonConf
+	jRPCServer.Register("inst/install", app.rpcInstanceInstall)
+	jRPCServer.Register("inst/uninstall", app.rpcInstanceInstall)
+	jRPCServer.Register("inst/start", app.rpcInstanceStart)
+	jRPCServer.Register("inst/stop", app.rpcInstanceStop)
+	jRPCServer.Register("inst/backup", app.rpcInstanceBackup)
+	jRPCServer.Register("inst/restore", app.rpcInstanceRestore)
 
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 

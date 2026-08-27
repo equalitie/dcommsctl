@@ -8,13 +8,19 @@
         <script>
             const ws = new WebSocket('ws://localhost:8080/ws');
 
+            let instanceId = null;
+
             ws.onopen = () => {
               document.getElementById('result').textContent = 'connected';
-            callRpc();
             };
 
             ws.onmessage = (event) => {
               const data = JSON.parse(event.data);
+
+                if (data.result.id) {
+                    instanceId = data.result.id;
+                }
+
               document.getElementById('result').textContent = JSON.stringify(data, null, 2);
             };
 
@@ -22,13 +28,18 @@
               document.getElementById('result').textContent = err;
             };
 
-            function callRpc() {
-            }
-
-            function sendCreate() {
+            function sendInstall() {
               ws.send(JSON.stringify({
                 jsonrpc: '2.0',
-                method: 'install',
+                method: 'inst/install',
+                params: { name: "peertube" },
+                id: 1
+              }));
+            }
+            function sendUninstall() {
+              ws.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'inst/uninstall',
                 params: { name: "peertube" },
                 id: 1
               }));
@@ -36,16 +47,33 @@
             function sendStart() {
               ws.send(JSON.stringify({
                 jsonrpc: '2.0',
-                method: 'start',
-                params: { id: 0 },
+                method: 'inst/start',
+                params: { id: instanceId },
                 id: 1
               }));
             }
             function sendStop() {
               ws.send(JSON.stringify({
                 jsonrpc: '2.0',
-                method: 'stop',
-                params: { id: 0 },
+                method: 'inst/stop',
+                params: { id: instanceId },
+                id: 1
+              }));
+            }
+
+            function sendBackup() {
+              ws.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'inst/backup',
+                params: { id: instanceId },
+                id: 1
+              }));
+            }
+            function sendRestore() {
+              ws.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'inst/restore',
+                params: { id: instanceId },
                 id: 1
               }));
             }
@@ -56,9 +84,12 @@
         <div id="result"></div>
 
         <div>
-            <button onClick="sendCreate()">Create</button>
+            <button onClick="sendInstall()">Install</button>
+            <button onClick="sendUninstall()">Uninstall</button>
             <button onClick="sendStart()">Start</button>
             <button onClick="sendStop()">Stop</button>
+            <button onClick="sendBackup()">Backup</button>
+            <button onClick="sendRestore()">Restore</button>
         </div>
 
 
