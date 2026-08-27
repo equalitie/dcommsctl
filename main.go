@@ -182,8 +182,8 @@ func main() {
 	// )
 	// defer stop()
 	app.ctx = rootContext
-	app.systemCfg.DcommsConfFilesDir = "./dcomms-docker-compose"
-	app.systemCfg.InstancesDir = "./.instances"
+	app.systemCfg.DcommsConfFilesDir, _ = filepath.Abs("./dcomms-docker-compose")
+	app.systemCfg.InstancesDir, _ = filepath.Abs("./.instances")
 	app.systemCfg.Applications = make(map[string]ApplicationConfig)
 
 	jRPCServer := NewJRPCServer()

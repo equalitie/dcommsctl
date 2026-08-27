@@ -120,7 +120,6 @@ func (m *JobManager) startExec(ctx context.Context, instancePath string, jobName
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
 	jobCtx, cancel := context.WithCancel(ctx)
 

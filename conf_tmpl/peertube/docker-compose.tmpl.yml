@@ -21,7 +21,7 @@ services:
       # - assets:/app/client/dist
       - peertube_data:/data
       - peertube_config:/config
-    depends_on
+    depends_on:
       - peertube-postgres
       - peertube-redis
     networks:

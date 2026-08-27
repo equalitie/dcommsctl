@@ -50,8 +50,9 @@ func (app *GlobalState) rpcInstallInstance(ctx context.Context, args InstallInst
 			}
 
 			instanceID := filepath.Base(instanceDir)
+			lockFileName := "." + jobType + ".lock"
 
-			lockFile := jobLockFile(path.Join(instanceDir, "."+jobType+".lock"))
+			lockFile := jobLockFile(path.Join(instanceDir, lockFileName))
 
 			if lockFile == nil {
 				return InstallInstanceResult{}, fmt.Errorf("The job is in progress")
@@ -59,10 +60,10 @@ func (app *GlobalState) rpcInstallInstance(ctx context.Context, args InstallInst
 			defer lockFile.Close()
 
 			pass := "test_pass"
-			cmd := exec.CommandContext(ctx, "./peertube_install.sh")
+			cmd := exec.CommandContext(ctx, path.Join(app.systemCfg.DcommsConfFilesDir, "peertube_install.sh"))
 			cmd.Dir = instanceDir
 			cmd.Env = []string{
-				"DCOMMS_DIR=" + app.systemCfg.DcommsConfFilesDir,
+				"LOCK_FILE=" + lockFileName,
 				"APP_DIR=" + instanceDir,
 				"PEERTUBE_ADMIN_PASS=" + pass,
 				"DWEB_DOMAIN=" + args.DomainName,
