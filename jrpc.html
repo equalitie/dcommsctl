@@ -40,7 +40,7 @@
               ws.send(JSON.stringify({
                 jsonrpc: '2.0',
                 method: 'inst/uninstall',
-                params: { name: "peertube" },
+                params: { id: instanceId },
                 id: 1
               }));
             }
