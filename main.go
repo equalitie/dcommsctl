@@ -101,25 +101,25 @@ func instanceGenID() string {
 func instanceCreate(ctx context.Context, instancesDir string, instanceName string) (string, error) {
 	instanceID := instanceName + "-" + instanceGenID()
 
-	pathToApp := path.Join(instancesDir, instanceID)
+	pathToInst := path.Join(instancesDir, instanceID)
 	for {
-		if _, err := os.Stat(pathToApp); err != nil {
+		if _, err := os.Stat(pathToInst); err != nil {
 			if os.IsNotExist(err) {
 				break
 			}
 		}
 
 		instanceID = instanceName + "-" + instanceGenID()
-		pathToApp = path.Join(instancesDir, instanceID)
+		pathToInst = path.Join(instancesDir, instanceID)
 	}
 
-	folderToCreate := path.Join(pathToApp, "jobs")
+	folderToCreate := path.Join(pathToInst, "jobs")
 
 	if err := os.MkdirAll(folderToCreate, 0o700); err != nil {
 		return "", fmt.Errorf("create instance dir: %s", err)
 	}
 
-	return pathToApp, nil
+	return pathToInst, nil
 }
 
 func isPortBindable(port int) bool {

@@ -52,5 +52,5 @@ services:
 
 configs:
   caddy-caddyfile-config:
-    file: ../caddy/Caddyfile.tmpl
+    file: Caddyfile
     external: false

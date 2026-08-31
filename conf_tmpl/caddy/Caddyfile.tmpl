@@ -16,50 +16,50 @@
 #  local_certs
 #}
 
-{$DWEB_DOMAIN}, http://{$DWEB_DOMAIN} {
+{{ .Domain }}, http://{{ .Domain }} {
   handle_path /new_email* {
     rewrite * /{path}
     reverse_proxy http://mailadm:3691
   }
   root * /www
   file_server browse
-  header Onion-Location http://{$DWEB_ONION}
+  header Onion-Location http://{{ .Domain }}
 }
 
-chat.{$DWEB_DOMAIN}, http://chat.{$DWEB_ONION} {
-  reverse_proxy http://element:80
-  header Onion-Location http://chat.{$DWEB_ONION}
-}
+# chat.{{ .Domain }}, http://chat.{{ .Domain }} {
+#   reverse_proxy http://element:80
+#   header Onion-Location http://chat.{{ .Domain }}
+# }
 
-matrix.{$DWEB_DOMAIN}, http://matrix.{$DWEB_ONION} {
-  reverse_proxy /_matrix/* http://synapse:8008
-  reverse_proxy /_synapse/client/* http://synapse:8008
-  # reverse_proxy /_synapse/admin/* http://synapse:8008 # Uncomment this line to use admin tools like Synapse-admin
-  reverse_proxy /.well-known/* http://synapse:8008
-  header Onion-Location http://matrix.{$DWEB_ONION}
-}
+# matrix.{{ .Domain }}, http://matrix.{{ .Domain }} {
+#   reverse_proxy /_matrix/* http://synapse:8008
+#   reverse_proxy /_synapse/client/* http://synapse:8008
+#   # reverse_proxy /_synapse/admin/* http://synapse:8008 # Uncomment this line to use admin tools like Synapse-admin
+#   reverse_proxy /.well-known/* http://synapse:8008
+#   header Onion-Location http://matrix.{{ .Domain }}
+# }
+# 
+# matrix.{{ .Domain }}:8448 {
+#   reverse_proxy http://synapse:8008
+# }
+# 
+# matrixrtc.{{ .Domain }}, https://matrixrtc.{{ .Domain }} {
+#   reverse_proxy /livekit/jwt* auth-service:8080
+#   reverse_proxy /sfu/get* auth-service:8080
+#   handle_path /livekit/sfu* {
+#     reverse_proxy livekit:7880
+#   }
+# }
 
-matrix.{$DWEB_DOMAIN}:8448 {
-  reverse_proxy http://synapse:8008
-}
-
-matrixrtc.{$DWEB_DOMAIN}, https://matrixrtc.{$DWEB_DOMAIN} {
-  reverse_proxy /livekit/jwt* auth-service:8080
-  reverse_proxy /sfu/get* auth-service:8080
-  handle_path /livekit/sfu* {
-    reverse_proxy livekit:7880
-  }
-}
-
-peertube.{$DWEB_DOMAIN}:1935, https://peertube.{$DWEB_DOMAIN}:1935 {
+peertube.{{ .Domain }}:1935, https://peertube.{{ Domain }}:1935 {
   reverse_proxy http://peertube-back:1935
 }
 
-peertube.{$DWEB_DOMAIN}, https://peertube.{$DWEB_DOMAIN} {
+peertube.{{ .Domain }}, https://peertube.{{ .Domain }} {
   reverse_proxy http://peertube-back:9000
 }
 
-social.{$DWEB_DOMAIN}, http://social.{$DWEB_ONION} {
+social.{{ .Domain }}, http://social.{{ .Domain }} {
 
     root * /srv/mastodon/public
     encode gzip
@@ -79,7 +79,7 @@ social.{$DWEB_DOMAIN}, http://social.{$DWEB_ONION} {
     header {
             Strict-Transport-Security "max-age=31536000;"
     }
-    header Onion-Location http://mastodon.{$DWEB_ONION}
+    header Onion-Location http://mastodon.{{ .Domain }}
     header /sw.js  Cache-Control "public, max-age=0";
     header /emoji* Cache-Control "public, max-age=31536000, immutable"
     header /packs* Cache-Control "public, max-age=31536000, immutable"
