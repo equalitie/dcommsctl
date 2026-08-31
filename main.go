@@ -168,7 +168,7 @@ func main() {
 	app.ctx = rootContext
 	app.systemCfg.DcommsConfFilesDir, _ = filepath.Abs("./dcomms-docker-compose")
 	app.systemCfg.InstancesDir, _ = filepath.Abs("./.instances")
-	app.systemCfg.BackupsDir, _ = filepath.Abs("./scripts")
+	app.systemCfg.ScriptsDir, _ = filepath.Abs("./scripts")
 	app.systemCfg.BackupsDir, _ = filepath.Abs("./.backups")
 
 	jRPCServer := NewJRPCServer()

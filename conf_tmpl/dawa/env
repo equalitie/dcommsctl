@@ -1,0 +1,10 @@
+# Dawa server configuration
+SITE_TITLE={{ .Domain }}
+SITE_DOMAIN={{ .Domain }}
+
+# Generated later by install script using `openssl rand -hex 64`
+# SALT=
+# SECRET_KEY_BASE=
+
+# Generated later by install script using `openssl ecparam -name secp521r1 -genkey -noout`
+# OPENID_PRIVATE_KEY=

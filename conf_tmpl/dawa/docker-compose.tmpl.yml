@@ -2,21 +2,17 @@ name: dawa
 
 services:
   dawa:
-    image: dawa
+    image: localhost:5000/dawa:latest
     container_name: dawa
+    env_file: ./env
     ports:
-      - "8080:{{ .PortOut }}"
+      - "{{ .PortOut }}:8080"
     environment:
       - RAILS_ENV=production
       - RAILS_LOG_LEVEL=debug
       - DEMO=true
       - DOCKER_URL=http://docker-proxy:2375
       - PUBLIC_PROTOCOL=http
-      - SITE_TITLE
-      - SITE_DOMAIN
-      - SECRET_KEY_BASE
-      - SALT
-      - OPENID_PRIVATE_KEY
     volumes:
       - dawa_storage:/rails/storage
     deploy:

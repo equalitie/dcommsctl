@@ -25,7 +25,7 @@ func dawaCreateInstance(ctx context.Context, instancesDir string) (string, error
 		return "", err
 	}
 
-	data := PeertubeConfig{
+	data := DawaConfig{
 		Domain:  "dawa.",
 		PortOut: 8081,
 	}
