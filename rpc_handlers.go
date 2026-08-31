@@ -27,9 +27,41 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 	jobID := jobID(jobType)
 
 	switch applicationID {
+
+	case "caddy":
+		{
+			config := CaddyConfig{}
+			instanceDir, err := caddyCreateInstance(ctx, app.systemCfg.InstancesDir, config)
+			if err != nil {
+				return InstallInstanceResult{}, err
+			}
+
+			instanceID := filepath.Base(instanceDir)
+			lockFileName := "." + jobType + ".lock"
+
+			lockFile := jobLockFile(path.Join(instanceDir, lockFileName))
+			if lockFile == nil {
+				return InstallInstanceResult{}, fmt.Errorf("The job is in progress")
+			}
+			defer lockFile.Close()
+			return InstallInstanceResult{
+				JobID: jobID,
+				ID:    instanceID,
+			}, nil
+
+		}
 	case "peertube":
 		{
-			instanceDir, err := peertubeCreateInstance(ctx, app.systemCfg.InstancesDir)
+			config := PeertubeConfig{
+				Domain:   "peertube.",
+				PortOut:  1935,
+				PortOut2: 9090,
+				Db: DbConfig{
+					Password: "",
+				},
+			}
+
+			instanceDir, err := peertubeCreateInstance(ctx, app.systemCfg.InstancesDir, config)
 			if err != nil {
 				return InstallInstanceResult{}, err
 			}
@@ -67,7 +99,12 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 		}
 	case "dawa":
 		{
-			instanceDir, err := dawaCreateInstance(ctx, app.systemCfg.InstancesDir)
+			config := DawaConfig{
+				Domain:  "dawa.",
+				PortOut: 8081,
+			}
+
+			instanceDir, err := dawaCreateInstance(ctx, app.systemCfg.InstancesDir, config)
 			if err != nil {
 				return InstallInstanceResult{}, err
 			}

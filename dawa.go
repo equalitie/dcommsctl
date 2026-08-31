@@ -12,7 +12,7 @@ type DawaConfig struct {
 	PortOut int
 }
 
-func dawaCreateInstance(ctx context.Context, instancesDir string) (string, error) {
+func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaConfig) (string, error) {
 	tmpl, err := template.ParseFiles("./conf_tmpl/dawa/docker-compose.tmpl.yml")
 	if err != nil {
 		return "", err
@@ -25,12 +25,7 @@ func dawaCreateInstance(ctx context.Context, instancesDir string) (string, error
 		return "", err
 	}
 
-	data := DawaConfig{
-		Domain:  "dawa.",
-		PortOut: 8081,
-	}
-
-	if err := tmpl.Execute(composeFile, &data); err != nil {
+	if err := tmpl.Execute(composeFile, &config); err != nil {
 		return "", err
 	}
 
@@ -44,7 +39,7 @@ func dawaCreateInstance(ctx context.Context, instancesDir string) (string, error
 		return "", err
 	}
 
-	if err := envTmpl.Execute(envFile, &data); err != nil {
+	if err := envTmpl.Execute(envFile, &config); err != nil {
 		return "", err
 	}
 

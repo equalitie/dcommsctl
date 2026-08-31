@@ -10,7 +10,10 @@ import (
 
 // caddy is a proxy for other services so it's basically a single instance service
 
-type CaddyConfig struct{}
+type CaddyConfig struct {
+	Domain string
+	Port   int
+}
 
 func caddyIsInstalled(instancesDir string) (bool, error) {
 	pathToInst := path.Join(instancesDir, "caddy")
@@ -25,7 +28,7 @@ func caddyIsInstalled(instancesDir string) (bool, error) {
 	return true, nil
 }
 
-func caddyCreateInstance(ctx context.Context, instancesDir string) (string, error) {
+func caddyCreateInstance(ctx context.Context, instancesDir string, config CaddyConfig) (string, error) {
 	pathToInst := path.Join(instancesDir, "caddy")
 
 	if alreadyInstalled, err := caddyIsInstalled(instancesDir); alreadyInstalled {
@@ -50,9 +53,7 @@ func caddyCreateInstance(ctx context.Context, instancesDir string) (string, erro
 		return "", err
 	}
 
-	data := CaddyConfig{}
-
-	if err := tmpl.Execute(composeFile, &data); err != nil {
+	if err := tmpl.Execute(composeFile, &config); err != nil {
 		return "", err
 	}
 
@@ -66,7 +67,7 @@ func caddyCreateInstance(ctx context.Context, instancesDir string) (string, erro
 		return "", err
 	}
 
-	if err := envTmpl.Execute(envFile, &data); err != nil {
+	if err := envTmpl.Execute(envFile, &config); err != nil {
 		return "", err
 	}
 

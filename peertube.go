@@ -22,7 +22,7 @@ type PeertubeConfig struct {
 	Db       DbConfig
 }
 
-func peertubeCreateInstance(ctx context.Context, instancesDir string) (string, error) {
+func peertubeCreateInstance(ctx context.Context, instancesDir string, config PeertubeConfig) (string, error) {
 	tmpl, err := template.ParseFiles("./conf_tmpl/peertube/docker-compose.tmpl.yml")
 	if err != nil {
 		return "", err
@@ -35,16 +35,7 @@ func peertubeCreateInstance(ctx context.Context, instancesDir string) (string, e
 		return "", err
 	}
 
-	data := PeertubeConfig{
-		Domain:   "peertube.",
-		PortOut:  1935,
-		PortOut2: 9090,
-		Db: DbConfig{
-			Password: "",
-		},
-	}
-
-	if err := tmpl.Execute(composeFile, &data); err != nil {
+	if err := tmpl.Execute(composeFile, &config); err != nil {
 		return "", err
 	}
 
@@ -58,7 +49,7 @@ func peertubeCreateInstance(ctx context.Context, instancesDir string) (string, e
 		return "", err
 	}
 
-	if err := envTmpl.Execute(envFile, &data); err != nil {
+	if err := envTmpl.Execute(envFile, &config); err != nil {
 		return "", err
 	}
 
