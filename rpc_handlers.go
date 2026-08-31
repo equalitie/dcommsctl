@@ -65,6 +65,39 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 				AdminPass:  pass,
 			}, nil
 		}
+	case "dawa":
+		{
+			instanceDir, err := dawaCreateInstance(ctx, app.systemCfg.InstancesDir)
+			if err != nil {
+				return InstallInstanceResult{}, err
+			}
+
+			instanceID := filepath.Base(instanceDir)
+			lockFileName := "." + jobType + ".lock"
+
+			lockFile := jobLockFile(path.Join(instanceDir, lockFileName))
+
+			if lockFile == nil {
+				return InstallInstanceResult{}, fmt.Errorf("The job is in progress")
+			}
+			defer lockFile.Close()
+
+			cmd := exec.CommandContext(ctx, path.Join(app.systemCfg.ScriptsDir, "dawa_install.sh"))
+			cmd.Dir = instanceDir
+			cmd.Env = []string{
+				"LOCK_FILE=" + lockFileName,
+				"APP_DIR=" + instanceDir,
+			}
+
+			if err := app.jobsManager.startExec(ctx, instanceDir, jobID, cmd); err != nil {
+				return InstallInstanceResult{}, err
+			}
+
+			return InstallInstanceResult{
+				JobID: jobID,
+				ID:    instanceID,
+			}, nil
+		}
 	}
 	return InstallInstanceResult{}, nil
 }

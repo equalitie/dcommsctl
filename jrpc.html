@@ -9,6 +9,8 @@
             const ws = new WebSocket('ws://localhost:8080/ws');
 
             let instanceId = null;
+            let dawaInstanceId = null;
+            let pendingInstallApp = null;
 
             ws.onopen = () => {
               document.getElementById('result').textContent = 'connected';
@@ -18,7 +20,12 @@
               const data = JSON.parse(event.data);
 
                 if (data.result.id) {
-                    instanceId = data.result.id;
+                    if (pendingInstallApp === 'dawa') {
+                        dawaInstanceId = data.result.id;
+                    } else {
+                        instanceId = data.result.id;
+                    }
+                    pendingInstallApp = null;
                 }
 
               document.getElementById('result').textContent = JSON.stringify(data, null, 2);
@@ -29,6 +36,7 @@
             };
 
             function sendInstall() {
+              pendingInstallApp = 'peertube';
               ws.send(JSON.stringify({
                 jsonrpc: '2.0',
                 method: 'inst/install',
@@ -78,18 +86,59 @@
               }));
             }
 
+            function sendDawaInstall() {
+              pendingInstallApp = 'dawa';
+              ws.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'inst/install',
+                params: { name: "dawa" },
+                id: 1
+              }));
+            }
+            function sendDawaUninstall() {
+              ws.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'inst/uninstall',
+                params: { id: dawaInstanceId },
+                id: 1
+              }));
+            }
+            function sendDawaStart() {
+              ws.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'inst/start',
+                params: { id: dawaInstanceId },
+                id: 1
+              }));
+            }
+            function sendDawaStop() {
+              ws.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'inst/stop',
+                params: { id: dawaInstanceId },
+                id: 1
+              }));
+            }
+
         </script>
 
 
         <div id="result"></div>
 
         <div>
-            <button onClick="sendInstall()">Install</button>
-            <button onClick="sendUninstall()">Uninstall</button>
-            <button onClick="sendStart()">Start</button>
-            <button onClick="sendStop()">Stop</button>
-            <button onClick="sendBackup()">Backup</button>
-            <button onClick="sendRestore()">Restore</button>
+            <button onClick="sendInstall()">Install Peertube</button>
+            <button onClick="sendUninstall()">Uninstall Peertube</button>
+            <button onClick="sendStart()">Start Peertube</button>
+            <button onClick="sendStop()">Stop Peertube</button>
+            <button onClick="sendBackup()">Backup Peertube</button>
+            <button onClick="sendRestore()">Restore Peertube</button>
+        </div>
+
+        <div>
+            <button onClick="sendDawaInstall()">Install Dawa</button>
+            <button onClick="sendDawaUninstall()">Uninstall Dawa</button>
+            <button onClick="sendDawaStart()">Start Dawa</button>
+            <button onClick="sendDawaStop()">Stop Dawa</button>
         </div>
 
 
