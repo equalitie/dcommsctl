@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"path"
 	"text/template"
@@ -41,6 +42,13 @@ func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaCon
 
 	if err := envTmpl.Execute(envFile, &config); err != nil {
 		return "", err
+	}
+
+	caddyRouteJSON, err := os.ReadFile("./conf_tmpl/dawa/caddy-route.json")
+
+	endpoint := "localhost:2019/config/apps/http/servers/dcomms/routes"
+	if err := caddySendRequest(ctx, endpoint, http.MethodPut, caddyRouteJSON); err != nil {
+		return "", nil
 	}
 
 	return pathToInst, nil

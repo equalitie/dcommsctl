@@ -1,0 +1,95 @@
+
+{
+  "@id": "dawa-route",
+  "match": [
+    {
+      "host": [
+        "{{ .Host }}"
+      ]
+    }
+  ],
+  "handle": [
+    {
+      "handler": "subroute",
+      "routes": [
+        {
+          "match": [
+            {
+              "path": [
+                "/cable*"
+              ]
+            }
+          ],
+          "handle": [
+            {
+              "handler": "reverse_proxy",
+              "upstreams": [
+                {
+                  "dial": "127.0.0.1:8080"
+                }
+              ],
+              "headers": {
+                "request": {
+                  "set": {
+                    "X-Real-IP": [
+                      "{http.request.remote.host}"
+                    ]
+                  }
+                }
+              },
+              "transport": {
+                "protocol": "http",
+                "dial_timeout": 60000000000,
+                "read_timeout": 60000000000
+              },
+              "flush_interval": -1
+            }
+          ],
+          "terminal": true
+        },
+        {
+          "match": [
+            {
+              "file": {
+                "root": "{{ .NginxDocRoot }}",
+                "try_files": [
+                  "{http.request.uri.path}"
+                ]
+              }
+            }
+          ],
+          "handle": [
+            {
+              "handler": "file_server",
+              "root": "{{ .NginxDocRoot }}"
+            }
+          ],
+          "terminal": true
+        },
+        {
+          "handle": [
+            {
+              "handler": "reverse_proxy",
+              "upstreams": [
+                {
+                  "dial": "127.0.0.1:8080"
+                }
+              ],
+              "headers": {
+                "request": {
+                  "set": {
+                    "X-Real-IP": [
+                      "{http.request.remote.host}"
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "terminal": true
+        }
+      ]
+    }
+  ],
+  "terminal": true
+}
