@@ -30,7 +30,9 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 
 	case "caddy":
 		{
-			config := CaddyConfig{}
+			config := CaddyConfig{
+				Domain: args.DomainName,
+			}
 			instanceDir, err := caddyCreateInstance(ctx, app.systemCfg.InstancesDir, config)
 			if err != nil {
 				return InstallInstanceResult{}, err
@@ -53,7 +55,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 	case "peertube":
 		{
 			config := PeertubeConfig{
-				Domain:   "peertube.",
+				Domain:   args.DomainName,
 				PortOut:  1935,
 				PortOut2: 9090,
 				Db: DbConfig{
@@ -100,7 +102,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 	case "dawa":
 		{
 			config := DawaConfig{
-				Domain:  "dawa.",
+				Domain:  args.DomainName,
 				PortOut: 8081,
 			}
 
