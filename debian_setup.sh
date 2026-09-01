@@ -2,7 +2,7 @@
 
 sudo apt-get update
 
-sudo apt-get install -y ca-certificates curl
+sudo apt-get install -y ca-certificates curl go
 
 sudo install -m 0755 -d /etc/apt/keyrings
 sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
@@ -23,6 +23,12 @@ sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plug
 
 sudo usermod -aG docker $USER
 
-sudo mkdir -p /var/www/dcomms
-
 sudo apt-get autoremove -y
+
+mkdir -p service
+
+go build -o service/dcommsctl ./main.go
+
+# this was copy-pasted from dcomms-docker-compose/install.sh:
+# sudo mkdir -p /var/www/dcomms
+
