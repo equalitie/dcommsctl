@@ -206,7 +206,9 @@ func (app *GlobalState) rpcInstanceStart(ctx context.Context, args InstanceStart
 	}
 	defer lockFile.Close()
 
-	cmd := exec.CommandContext(ctx, "docker compose up -d")
+	cmdString := fmt.Sprintf("docker compose up -d -p %s", instanceID)
+
+	cmd := exec.CommandContext(ctx, cmdString)
 	cmd.Dir = instanceDir
 	cmd.Env = []string{
 		"LOCK_FILE=" + lockFileName,

@@ -82,7 +82,7 @@ func caddySendRequest(ctx context.Context, endpoint string, method string, paylo
 	return nil
 }
 
-func caddyAddRoute(ctx context.Context, domain string, config CaddyConfig, instanceName, hostname, upstreamAddress string) error {
+func caddyAddRoute(ctx context.Context, instanceName, hostname, upstreamAddress string) error {
 	endpoint := "localhost:2019/config/apps/http/servers/dcomms/routes"
 
 	payload := CaddyRoute{
@@ -107,6 +107,25 @@ func caddyAddRoute(ctx context.Context, domain string, config CaddyConfig, insta
 	}
 
 	if err := caddySendRequest(ctx, endpoint, http.MethodPost, payloadJSON); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func caddyDropRoute(ctx context.Context, instanceName string) error {
+	// FIXME: untested, change payload type
+	endpoint := "localhost:2019/config/apps/http/servers/dcomms/routes"
+
+	payload := CaddyRoute{
+		ID: instanceName,
+	}
+
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	if err := caddySendRequest(ctx, endpoint, http.MethodDelete, payloadJSON); err != nil {
 		return err
 	}
 

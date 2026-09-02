@@ -20,7 +20,7 @@ ws.addEventListener("open", () => {
             JSON.stringify({
                 method,
                 params,
-            })
+            });
     } catch (e) {
         console.error(e)
     }
