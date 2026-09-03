@@ -1,5 +1,5 @@
 # Dawa server configuration
-SITE_TITLE={{ .Domain }}
+SITE_TITLE=Dawa
 SITE_DOMAIN={{ .Domain }}
 
 # Generated later by install script using `openssl rand -hex 64`

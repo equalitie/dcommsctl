@@ -2,7 +2,7 @@ name: dawa
 
 services:
   dawa:
-    image: localhost:5000/dawa:latest
+    image: dawa:latest
     container_name: dawa
     env_file: ./env
     ports:
