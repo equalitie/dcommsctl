@@ -39,13 +39,6 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			}
 
 			instanceID := filepath.Base(instanceDir)
-			lockFileName := "." + jobType + ".lock"
-
-			lockFile := jobLockFile(path.Join(instanceDir, lockFileName))
-			if lockFile == nil {
-				return InstallInstanceResult{}, fmt.Errorf("The job is in progress")
-			}
-			defer lockFile.Close()
 			return InstallInstanceResult{
 				JobID: jobID,
 				ID:    instanceID,
@@ -156,9 +149,9 @@ func (app *GlobalState) rpcInstanceUninstall(ctx context.Context, args RemoveApp
 	instanceID := args.ID
 
 	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
-	lockFileName := "." + jobType + ".lock"
+	lockFileName := path.Join(instanceDir, "."+jobType+".lock")
 
-	lockFile := jobLockFile(path.Join(instanceDir, lockFileName))
+	lockFile := jobLockFile(lockFileName)
 
 	if lockFile == nil {
 		return InstanceUninstallResult{}, fmt.Errorf("The job is in progress")
@@ -197,9 +190,9 @@ func (app *GlobalState) rpcInstanceStart(ctx context.Context, args InstanceStart
 	instanceID := args.InstanceName
 
 	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
-	lockFileName := "." + jobType + ".lock"
+	lockFileName := path.Join(instanceDir, "."+jobType+".lock")
 
-	lockFile := jobLockFile(path.Join(instanceDir, lockFileName))
+	lockFile := jobLockFile(lockFileName)
 
 	if lockFile == nil {
 		return InstanceStartResult{}, fmt.Errorf("The job is in progress")
