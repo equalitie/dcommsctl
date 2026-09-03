@@ -2,19 +2,6 @@
 
 set -voeu pipefail
 
-log_path=./install.partial.log
-final_log_path=./install.log
-
-cleanup() {
-  status=$?
-
-  rm "$LOCK_FILE"
-
-  exit "$status"
-}
-
-trap cleanup EXIT
-
 printf "[DCOMMS State] Generating Dawa config\n"
 
 SALT=$(openssl rand -hex 64)
@@ -30,7 +17,5 @@ printf "[DCOMMS State] Starting dawa app\n"
 export DOCKER_GID=$(getent group docker | cut -d: -f3)
 
 docker compose up -d
-
-cp $log_path $final_log_path
 
 printf "[DCOMMS State] Dawa install done\n"
