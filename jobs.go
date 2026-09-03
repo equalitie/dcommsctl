@@ -16,8 +16,10 @@ import (
 type JobID string
 
 type JobRecord struct {
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx          context.Context
+	cancel       context.CancelFunc
+	lockFilePath string
+	logFilePath  string
 }
 
 type JobManager struct {
@@ -49,9 +51,21 @@ func jobLockFile(lockPath string) *os.File {
 	return f
 }
 
-func (m *JobManager) run(ctx context.Context, rec *JobRecord, w io.Writer, cmd *exec.Cmd) error {
-	cmd.Stdout = w
-	cmd.Stderr = w
+func (m *JobManager) run(ctx context.Context, rec *JobRecord, cmd *exec.Cmd) error {
+	f, err := os.OpenFile(rec.logFilePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+
+	defer f.Close()
+
+	wout := io.MultiWriter(f, os.Stdout)
+	werr := io.MultiWriter(f, os.Stderr)
+
+	cmd.Stdout = wout
+	cmd.Stderr = werr
+
+	defer os.Remove(rec.lockFilePath)
 
 	if err := cmd.Run(); err != nil {
 		return err
@@ -60,22 +74,22 @@ func (m *JobManager) run(ctx context.Context, rec *JobRecord, w io.Writer, cmd *
 	return nil
 }
 
-func (m *JobManager) startExec(ctx context.Context, instancePath string, jobName string, cmd *exec.Cmd) error {
-	partialPath := filepath.Join(instancePath, "jobs", jobName+".partial.log")
-
-	f, err := os.OpenFile(partialPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
+func (m *JobManager) startExec(ctx context.Context, lockFilePath, jobName string, cmd *exec.Cmd) error {
+	logFilePath := filepath.Join(cmd.Dir, "jobs", jobName+".partial.log")
 
 	jobCtx, cancel := context.WithCancel(ctx)
-
 	rec := &JobRecord{
-		ctx:    jobCtx,
-		cancel: cancel,
+		ctx:          jobCtx,
+		cancel:       cancel,
+		lockFilePath: lockFilePath,
+		logFilePath:  logFilePath,
 	}
 
-	go m.run(jobCtx, rec, f, cmd)
+	go func() {
+		if err := m.run(jobCtx, rec, cmd); err != nil {
+			fmt.Println("job failed", err)
+		}
+	}()
 
 	return nil
 }

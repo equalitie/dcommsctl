@@ -62,9 +62,9 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			}
 
 			instanceID := filepath.Base(instanceDir)
-			lockFileName := "." + jobType + ".lock"
+			lockFilePath := path.Join(instanceDir, "."+jobType+".lock")
 
-			lockFile := jobLockFile(path.Join(instanceDir, lockFileName))
+			lockFile := jobLockFile(lockFilePath)
 
 			if lockFile == nil {
 				return InstallInstanceResult{}, fmt.Errorf("The job is in progress")
@@ -75,13 +75,13 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			cmd := exec.CommandContext(ctx, path.Join(app.systemCfg.DcommsConfFilesDir, "peertube_install.sh"))
 			cmd.Dir = instanceDir
 			cmd.Env = []string{
-				"LOCK_FILE=" + lockFileName,
+				"LOCK_FILE=" + lockFilePath,
 				"APP_DIR=" + instanceDir,
 				"PEERTUBE_ADMIN_PASS=" + pass,
 				"DWEB_DOMAIN=" + args.DomainName,
 			}
 
-			if err := app.jobsManager.startExec(ctx, instanceDir, jobID, cmd); err != nil {
+			if err := app.jobsManager.startExec(ctx, lockFilePath, jobID, cmd); err != nil {
 				return InstallInstanceResult{}, err
 			}
 
@@ -105,23 +105,22 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			}
 
 			instanceID := filepath.Base(instanceDir)
-			lockFileName := "." + jobType + ".lock"
+			lockFilePath := "." + jobType + ".lock"
 
-			lockFile := jobLockFile(path.Join(instanceDir, lockFileName))
+			lockFile := jobLockFile(path.Join(instanceDir, lockFilePath))
 
 			if lockFile == nil {
 				return InstallInstanceResult{}, fmt.Errorf("The job is in progress")
 			}
-			defer lockFile.Close()
 
 			cmd := exec.CommandContext(ctx, path.Join(app.systemCfg.ScriptsDir, "dawa_install.sh"))
 			cmd.Dir = instanceDir
 			cmd.Env = []string{
-				"LOCK_FILE=" + lockFileName,
+				"LOCK_FILE=" + lockFilePath,
 				"APP_DIR=" + instanceDir,
 			}
 
-			if err := app.jobsManager.startExec(ctx, instanceDir, jobID, cmd); err != nil {
+			if err := app.jobsManager.startExec(ctx, lockFilePath, jobID, cmd); err != nil {
 				return InstallInstanceResult{}, err
 			}
 
@@ -149,23 +148,21 @@ func (app *GlobalState) rpcInstanceUninstall(ctx context.Context, args RemoveApp
 	instanceID := args.ID
 
 	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
-	lockFileName := path.Join(instanceDir, "."+jobType+".lock")
+	lockFilePath := path.Join(instanceDir, "."+jobType+".lock")
 
-	lockFile := jobLockFile(lockFileName)
+	lockFile := jobLockFile(lockFilePath)
 
 	if lockFile == nil {
 		return InstanceUninstallResult{}, fmt.Errorf("The job is in progress")
 	}
 	defer lockFile.Close()
 
-	cmd := exec.CommandContext(ctx, "docker compose down")
-	cmd.Dir = instanceDir
-	cmd.Env = []string{
-		"LOCK_FILE=" + lockFileName,
-		"APP_DIR=" + instanceDir,
-	}
+	cmdArgs := []string{"compose", "down"}
 
-	if err := app.jobsManager.startExec(ctx, instanceDir, jobID, cmd); err != nil {
+	cmd := exec.CommandContext(ctx, "docker", cmdArgs...)
+	cmd.Dir = instanceDir
+
+	if err := app.jobsManager.startExec(ctx, lockFilePath, jobID, cmd); err != nil {
 		return InstanceUninstallResult{}, err
 	}
 
@@ -188,27 +185,26 @@ func (app *GlobalState) rpcInstanceStart(ctx context.Context, args InstanceStart
 	jobID := jobID(jobType)
 
 	instanceID := args.InstanceName
+	if instanceID == "" {
+		return InstanceStartResult{}, fmt.Errorf("No instance specified")
+	}
 
 	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
-	lockFileName := path.Join(instanceDir, "."+jobType+".lock")
+	lockFilePath := path.Join(instanceDir, "."+jobType+".lock")
 
-	lockFile := jobLockFile(lockFileName)
+	lockFile := jobLockFile(lockFilePath)
 
 	if lockFile == nil {
 		return InstanceStartResult{}, fmt.Errorf("The job is in progress")
 	}
 	defer lockFile.Close()
 
-	cmdString := fmt.Sprintf("docker compose up -d -p %s", instanceID)
+	cmdArgs := []string{"compose", "--project-name", instanceID, "up", "-d"}
 
-	cmd := exec.CommandContext(ctx, cmdString)
+	cmd := exec.CommandContext(ctx, "docker", cmdArgs...)
 	cmd.Dir = instanceDir
-	cmd.Env = []string{
-		"LOCK_FILE=" + lockFileName,
-		"APP_DIR=" + instanceDir,
-	}
 
-	if err := app.jobsManager.startExec(ctx, instanceDir, jobID, cmd); err != nil {
+	if err := app.jobsManager.startExec(ctx, lockFilePath, jobID, cmd); err != nil {
 		return InstanceStartResult{}, err
 	}
 
@@ -232,23 +228,20 @@ func (app *GlobalState) rpcInstanceStop(ctx context.Context, args InstanceStopAr
 	instanceID := args.InstanceName
 
 	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
-	lockFileName := "." + jobType + ".lock"
+	lockFilePath := "." + jobType + ".lock"
 
-	lockFile := jobLockFile(path.Join(instanceDir, lockFileName))
+	lockFile := jobLockFile(path.Join(instanceDir, lockFilePath))
 
 	if lockFile == nil {
 		return InstanceStopResult{}, fmt.Errorf("The job is in progress")
 	}
 	defer lockFile.Close()
 
-	cmd := exec.CommandContext(ctx, "docker compose down")
-	cmd.Dir = instanceDir
-	cmd.Env = []string{
-		"LOCK_FILE=" + lockFileName,
-		"APP_DIR=" + instanceDir,
-	}
+	cmdArgs := []string{"compose", "down"}
 
-	if err := app.jobsManager.startExec(ctx, instanceDir, jobID, cmd); err != nil {
+	cmd := exec.CommandContext(ctx, "docker", cmdArgs...)
+	cmd.Dir = instanceDir
+	if err := app.jobsManager.startExec(ctx, lockFilePath, jobID, cmd); err != nil {
 		return InstanceStopResult{}, err
 	}
 
@@ -272,9 +265,9 @@ func (app *GlobalState) rpcInstanceBackup(ctx context.Context, args InstanceBack
 	instanceID := args.InstanceName
 
 	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
-	lockFileName := "." + jobType + ".lock"
+	lockFilePath := "." + jobType + ".lock"
 
-	lockFile := jobLockFile(path.Join(instanceDir, lockFileName))
+	lockFile := jobLockFile(path.Join(instanceDir, lockFilePath))
 
 	if lockFile == nil {
 		return InstanceBackupResult{}, fmt.Errorf("The job is in progress")
@@ -293,10 +286,9 @@ func (app *GlobalState) rpcInstanceBackup(ctx context.Context, args InstanceBack
 	cmd.Env = []string{
 		"BACKUP_ROOT=" + backupRoot,
 		"BACKUP_ID=" + backupID,
-		"LOCK_FILE=" + lockFileName,
 		"APP_DIR=" + instanceDir,
 	}
-	if err := app.jobsManager.startExec(ctx, instanceDir, jobID, cmd); err != nil {
+	if err := app.jobsManager.startExec(ctx, lockFilePath, jobID, cmd); err != nil {
 		return InstanceBackupResult{}, err
 	}
 
@@ -320,9 +312,9 @@ func (app *GlobalState) rpcInstanceRestore(ctx context.Context, args InstanceRes
 	instanceID := args.InstanceName
 
 	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
-	lockFileName := "." + jobType + ".lock"
+	lockFilePath := "." + jobType + ".lock"
 
-	lockFile := jobLockFile(path.Join(instanceDir, lockFileName))
+	lockFile := jobLockFile(path.Join(instanceDir, lockFilePath))
 
 	if lockFile == nil {
 		return InstanceRestoreResult{}, fmt.Errorf("The job is in progress")
@@ -340,10 +332,9 @@ func (app *GlobalState) rpcInstanceRestore(ctx context.Context, args InstanceRes
 	cmd.Env = []string{
 		"BACKUP_ROOT=" + backupRoot,
 		"BACKUP_ID=" + backupID,
-		"LOCK_FILE=" + lockFileName,
 		"APP_DIR=" + instanceDir,
 	}
-	if err := app.jobsManager.startExec(ctx, instanceDir, jobID, cmd); err != nil {
+	if err := app.jobsManager.startExec(ctx, lockFilePath, jobID, cmd); err != nil {
 		return InstanceRestoreResult{}, err
 	}
 

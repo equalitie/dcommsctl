@@ -6,23 +6,15 @@ set -oeu pipefail
 final_dir="$BACKUP_ROOT/peertube/$BACKUP_ID"
 work_dir="$final_dir.partial"
 completed=0
-# TODO: locks
-lock_acquired=0
-source ./helpers.sh
 
 cleanup() {
   status=$?
 
   # NOTE: can I just run this and not store if containers was stopped
-  ./dcomms_compose.sh start peertube-back 2>/dev/null
+  docker compose start peertube-back 2>/dev/null
 
   if [ "$completed" -ne 1 ] && [ -n "${work_dir:-}" ] && [ -d "$work_dir" ]; then
     rm -rf -- "$work_dir"
-  fi
-
-  if [ "$lock_acquired" -eq 1 ]; then
-    rm -f -- "$lock_dir/owner"
-    rmdir "$lock_dir" 2>/dev/null || true
   fi
 
   exit "$status"
@@ -36,9 +28,9 @@ rm -rf "$final_dir"
 
 mkdir -p "$work_dir"
 
-./dcomms_compose.sh stop peertube-back
+docker compose stop peertube-back
 
-./dcomms_compose.sh exec -T peertube-postgres sh -c \
+docker compose exec -T peertube-postgres sh -c \
   'PGPASSWORD=$POSTGRES_PASSWORD psql \
     -U "$POSTGRES_USER" \
     -d "$POSTGRES_DB" \
@@ -59,14 +51,14 @@ END
 $$;
 SQL
 
-./dcomms_compose.sh exec -T peertube-postgres sh -c \
+docker compose exec -T peertube-postgres sh -c \
   'PGPASSWORD=$POSTGRES_PASSWORD pg_dumpall 2>/dev/null \
     -U $POSTGRES_USER \
     -l $POSTGRES_DB' | \
   gzip > "$work_dir/pgump.sql.gz"
 
 # FIXME: figure out auth, works for default setup with an empty password
-./dcomms_compose.sh exec -T peertube-redis sh -c \
+docker compose exec -T peertube-redis sh -c \
   'redis-cli SAVE' | \
   gzip > "$work_dir/redis.rdb.gz"
 
