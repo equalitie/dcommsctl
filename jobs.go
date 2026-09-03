@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -64,8 +67,31 @@ func (m *JobManager) run(ctx context.Context, rec *JobRecord, cmd *exec.Cmd) err
 
 	cmd.Stdout = wout
 	cmd.Stderr = werr
+	cmd.WaitDelay = scriptGracePeriod
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
-	defer os.Remove(rec.lockFilePath)
+	cmd.Cancel = func() error {
+		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+		if errors.Is(err, syscall.ESRCH) {
+			return os.ErrProcessDone
+		}
+		return err
+	}
+
+	defer func() {
+		os.Remove(rec.lockFilePath)
+
+		replacePart := ".partial.log"
+
+		idx := strings.LastIndex(rec.logFilePath, replacePart)
+
+		newLogName := strings.Replace(rec.logFilePath, replacePart, ".log", idx)
+
+		if err := os.Rename(rec.lockFilePath, newLogName); err != nil {
+			// FIXME: proper error handling
+			fmt.Println("moving job log file:", err)
+		}
+	}()
 
 	if err := cmd.Run(); err != nil {
 		return err
@@ -97,8 +123,20 @@ func (m *JobManager) startExec(ctx context.Context, lockFilePath, jobName string
 func (m *JobManager) log(instancePath string, jobName string) {
 	partialPath := filepath.Join(instancePath, "jobs", jobName+".partial.log")
 
-	_, err := os.OpenFile(partialPath, os.O_RDONLY, 0o644)
+	f, err := os.OpenFile(partialPath, os.O_RDONLY, 0o644)
+
+	defer f.Close()
 	if err != nil {
+		if os.IsNotExist(err) {
+			fullPath := filepath.Join(instancePath, "jobs", jobName+".log")
+
+			f, err := os.OpenFile(fullPath, os.O_RDONLY, 0o644)
+			if err != nil {
+				return
+			}
+
+			defer f.Close()
+		}
 		return
 	}
 }
