@@ -37,8 +37,6 @@ services:
     tmpfs:
       - /tmp
       - /run
-    group_add:
-      - "${DOCKER_GID}"
 
 volumes:
   dawa_storage:
