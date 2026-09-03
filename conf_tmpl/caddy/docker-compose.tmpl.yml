@@ -22,7 +22,7 @@ services:
       - caddy_data:/data
       - caddy_config:/config
       - type: bind
-        source: /var/www
+        source: ./www
         target: /www
     networks:
       - caddy
@@ -43,9 +43,6 @@ services:
         published: 8448
         protocol: tcp
         mode: host
-    environment:
-          DWEB_DOMAIN: "${DWEB_DOMAIN}"
-          DWEB_ONION: "${DWEB_ONION}"
     configs:
       - source: caddy-caddyfile-config
         target: /etc/caddy/Caddyfile

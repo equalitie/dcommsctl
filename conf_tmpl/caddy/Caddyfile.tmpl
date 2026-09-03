@@ -21,7 +21,7 @@
     rewrite * /{path}
     reverse_proxy http://mailadm:3691
   }
-  root * /www
+  root * ./www
   file_server browse
   header Onion-Location http://{{ .Domain }}
 }

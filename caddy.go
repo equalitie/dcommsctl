@@ -146,10 +146,15 @@ func caddyCreateInstance(ctx context.Context, instancesDir string, config CaddyC
 		return "", err
 	}
 
-	folderToCreate := path.Join(pathToInst, "jobs")
+	dirsToCreate := []string{
+		"jobs",
+		"www",
+	}
 
-	if err := os.MkdirAll(folderToCreate, 0o700); err != nil {
-		return "", fmt.Errorf("create instance dir: %s", err)
+	for _, dir := range dirsToCreate {
+		if err := os.MkdirAll(path.Join(pathToInst, dir), 0o700); err != nil {
+			return "", fmt.Errorf("create dir %s for instance: %s", dir, err)
+		}
 	}
 
 	composeFile, err := os.OpenFile(path.Join(pathToInst, "docker-compose.yml"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
