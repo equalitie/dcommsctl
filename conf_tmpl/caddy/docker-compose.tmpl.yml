@@ -32,7 +32,7 @@ services:
       - peertube
     ports:
       - target: 80
-        published: 8000
+        published: {{ .Port }}
         protocol: tcp
         mode: host
       - target: 443

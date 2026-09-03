@@ -179,7 +179,7 @@ func main() {
 	jRPCServer.Logger = log.Default()
 
 	jRPCServer.Register("inst/install", app.rpcInstanceInstall)
-	jRPCServer.Register("inst/uninstall", app.rpcInstanceInstall)
+	jRPCServer.Register("inst/uninstall", app.rpcInstanceUninstall)
 	jRPCServer.Register("inst/start", app.rpcInstanceStart)
 	jRPCServer.Register("inst/stop", app.rpcInstanceStop)
 	jRPCServer.Register("inst/backup", app.rpcInstanceBackup)

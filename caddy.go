@@ -133,6 +133,12 @@ func caddyDropRoute(ctx context.Context, instanceName string) error {
 }
 
 func caddyCreateInstance(ctx context.Context, instancesDir string, config CaddyConfig) (string, error) {
+	if config.Domain == "" {
+		config.Domain = "localhost"
+	}
+	if config.Port == 0 {
+		config.Port = 8000
+	}
 	pathToInst := path.Join(instancesDir, "caddy")
 
 	if alreadyInstalled, err := caddyIsInstalled(instancesDir); alreadyInstalled {

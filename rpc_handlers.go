@@ -32,6 +32,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 		{
 			config := CaddyConfig{
 				Domain: args.DomainName,
+				Port:   8000,
 			}
 			instanceDir, err := caddyCreateInstance(ctx, app.systemCfg.InstancesDir, config)
 			if err != nil {
