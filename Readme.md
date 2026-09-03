@@ -1,63 +1,33 @@
 # What this is
 
-This is definitely not production quality but mostly a result of explorative programming session.
+This is a back end for dComms DIY project. It creates instances of applications and runs these via `docker compose` suite. There's a special application `dawa` which is the WebUI to manage this back end. Other supported apps for now are Mastodon and Peertube.
+
+NOTE: This is definitely not production quality but mostly a result of explorative programming sessions.
 
 # How to run
 
 Requirements
  * Go 
- * A web browser or curl
 
-Run the backend
+Run the back end
 
 ```
-chmod +x ./run.sh
-./run.sh
+go run ./
 ```
-
-Open url `http://localhost:8080/` in any browser
-
-# What is implemented
-
-Right now it's an application that you run on a host machine. It has some support for SSH connection to a VPS and running it there but not fully tested.
-
-It assumes the deployment target to be a Debian machine. It install everything required to run dcomms project, copies all the compose files required and calls a modified install script.
-
-A lot of the things are hardcoded for now. Podman implementation is bugged.
-
-The dcomms-docker-compose project is included not as a git submodule because of changes to the scripts. There's a temporary copy of install.sh script from that repo called install_podman.sh which is tailored for podman use.
-
-Targets are stored in `targets.csv` (soon to be JSON) file. If you need to remove all targets, just delete the file.
 
 # API
 
-The basic structure of entities looks like this:
-    * Target (Deployment target) - VPS or Cloud service
-     * Service - Docker/Podman compose service
-      * Actual containers
-
-So first of all we create a target, run install script there, then run the applications
-
-This is a rough draft, to check the actual api look at the `main.go` where mux handlers are registered
+Connect to a websocket on port 6006 and call these actions. Some examples (though incomplete) are in `jrpc.html`
 
 ```
-POST /target/create - create target with POST form data, returns target data in JSON format
-GET /target/list - get all targets in JSON format
-POST /target/{target_id}/update - update target with POST form data
-POST /target/{target_id}/install - install pre-requisites
-POST /target/{target_id}/start - run all applications
-POST /target/{target_id}/stop - stop all applications
-POST /target/{target_id}/check - right now pings remote Docker socket, gets API version and all running containers
-POST /target/{target_id}/backup/{application_name} - runs a backup for application
-POST /target/{target_id}/restore/{application_name} - runs a restore for application
-POST /target/{target_id}/application/add/{application_name} - adds a new application to the current stack
+inst/install - create new instance of an application (docker compose project for now)
+inst/start - start instance by instanceID
+inst/stop - stop instance by instanceID
+inst/backup - backup instance by instanceID
+inst/restore - restore instance by instanceID
 ```
 
-There is scratch throw-away Web UI at `http://localhost:8080/` but it might miss some features, so it's enough to just use curl:
-
-```
-curl -d 'host=127.127.127.127&username=dcomms&port=22&domainname=domainname.org&backend=docker&matrix_on=on' localhost:8080/target/create
-```
+This is far from complete. Look at `rpc_handlers.go` for arguments and return values
 
 # Toools to add
 
