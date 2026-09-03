@@ -59,7 +59,6 @@ func (m *JobManager) run(ctx context.Context, rec *JobRecord, cmd *exec.Cmd) err
 	if err != nil {
 		return err
 	}
-
 	defer f.Close()
 
 	wout := io.MultiWriter(f, os.Stdout)
@@ -87,7 +86,7 @@ func (m *JobManager) run(ctx context.Context, rec *JobRecord, cmd *exec.Cmd) err
 
 		newLogName := strings.Replace(rec.logFilePath, replacePart, ".log", idx)
 
-		if err := os.Rename(rec.lockFilePath, newLogName); err != nil {
+		if err := os.Rename(rec.logFilePath, newLogName); err != nil {
 			// FIXME: proper error handling
 			fmt.Println("moving job log file:", err)
 		}
