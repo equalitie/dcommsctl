@@ -22,6 +22,8 @@ import (
 //  - target (deployment target) is either VPS or cloud service
 //  - application is either docker compose project or docker swarm service
 
+const scriptGracePeriod = 20 * time.Second
+
 type NetworkRequest struct {
 	Name     string
 	Internal bool
@@ -159,13 +161,15 @@ func crashLogInit() {
 
 func main() {
 	serverError := make(chan error, 1)
-	stop := make(chan os.Signal, 1)
 	app := NewGlobalState()
 
-	tmpCtx := context.Background()
-	rootContext := context.WithValue(tmpCtx, "app", app)
+	rootContext, stop := signal.NotifyContext(
+		context.Background(),
+		os.Interrupt,
+		syscall.SIGTERM,
+	)
+	defer stop()
 
-	app.ctx = rootContext
 	app.systemCfg.DcommsConfFilesDir, _ = filepath.Abs("./dcomms-docker-compose")
 	app.systemCfg.InstancesDir, _ = filepath.Abs("./.instances")
 	app.systemCfg.ScriptsDir, _ = filepath.Abs("./scripts")
@@ -180,8 +184,6 @@ func main() {
 	jRPCServer.Register("inst/stop", app.rpcInstanceStop)
 	jRPCServer.Register("inst/backup", app.rpcInstanceBackup)
 	jRPCServer.Register("inst/restore", app.rpcInstanceRestore)
-
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 
 	mux := http.NewServeMux()
 
@@ -210,8 +212,10 @@ func main() {
 	select {
 	case err := <-serverError:
 		log.Printf("HTTP server error: %s", err)
-	case sig := <-stop:
-		log.Printf("Got shutdown signal: %s", sig)
+	case <-rootContext.Done():
+		log.Printf("shutdown requested (%v); wayting for %s grace period for scripts",
+			context.Cause(rootContext), scriptGracePeriod)
+		stop()
 	}
 
 	log.Println("Shutting down the server...")
