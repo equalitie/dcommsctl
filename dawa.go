@@ -60,7 +60,7 @@ func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaCon
 
 	caddyRouteJSON, err := os.ReadFile("./conf_tmpl/dawa/caddy-route.json")
 
-	endpoint := "localhost:2019/config/apps/http/servers/dcomms/routes"
+	endpoint := "http://localhost:2019/config/apps/http/servers/dcomms/routes"
 	if err := caddySendRequest(ctx, endpoint, http.MethodPut, caddyRouteJSON); err != nil {
 		return "", err
 	}
