@@ -1,4 +1,0 @@
-version: 0.0.1
-services:
-  peertube: 8.2.4
-  mastodon: 4.6
