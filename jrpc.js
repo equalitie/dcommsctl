@@ -1,7 +1,7 @@
 // script for testing json rpc
 // requires installing ws through package manager
 const WebSocket = require("ws");
-const url = "ws://localhost:8080/ws";
+const url = "ws://localhost:6006/ws";
 const ws = new WebSocket(url);
 
 if (process.argv.length < 4) {

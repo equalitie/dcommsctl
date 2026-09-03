@@ -192,7 +192,7 @@ func main() {
 	addr := os.Getenv("WEBHOST_PORT")
 
 	if addr == "" {
-		addr = ":8080"
+		addr = ":6006"
 	}
 
 	server := &http.Server{
