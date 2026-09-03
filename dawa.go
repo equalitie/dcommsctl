@@ -20,8 +20,22 @@ func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaCon
 	}
 
 	pathToInst, err := instanceCreate(ctx, instancesDir, "dawa")
+	if err != nil {
+		return "", err
+	}
 
-	composeFile, err := os.OpenFile(path.Join(pathToInst, "docker-compose.yml"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	composePath := path.Join(pathToInst, "docker-compose.yml")
+	envPath := path.Join(pathToInst, "env")
+	fileFlags := os.O_CREATE | os.O_EXCL | os.O_WRONLY
+
+	completed := false
+	defer func() {
+		if !completed {
+			os.RemoveAll(pathToInst)
+		}
+	}()
+
+	composeFile, err := os.OpenFile(composePath, fileFlags, 0o644)
 	if err != nil {
 		return "", err
 	}
@@ -35,7 +49,7 @@ func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaCon
 		return "", err
 	}
 
-	envFile, err := os.OpenFile(path.Join(pathToInst, "env"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	envFile, err := os.OpenFile(envPath, fileFlags, 0o644)
 	if err != nil {
 		return "", err
 	}
@@ -48,8 +62,10 @@ func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaCon
 
 	endpoint := "localhost:2019/config/apps/http/servers/dcomms/routes"
 	if err := caddySendRequest(ctx, endpoint, http.MethodPut, caddyRouteJSON); err != nil {
-		return "", nil
+		return "", err
 	}
+
+	completed = true
 
 	return pathToInst, nil
 }
