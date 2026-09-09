@@ -1,0 +1,5 @@
+{
+    "id": "mastodon",
+    "name": "Mastodon",
+    "redirect_uri": "/auth/auth/openid_connect/callback"
+}

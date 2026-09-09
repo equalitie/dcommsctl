@@ -21,6 +21,7 @@ type PeertubeConfig struct {
 	PortOut  int
 	PortOut2 int
 	Db       DbConfig
+	Version  string
 }
 
 func peertubeCreateInstance(ctx context.Context, instancesDir string, config PeertubeConfig) (string, error) {

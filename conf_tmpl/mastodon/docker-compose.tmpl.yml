@@ -22,7 +22,7 @@ services:
       - mast-int
 
   mastodon-web:
-    image: tootsuite/mastodon:v4.5
+    image: tootsuite/mastodon:{{ .Version }}
       #healthcheck:
       #test: ['CMD-SHELL', 'wget -q --spider --proxy=off localhost:3000/health || exit 1']
     entrypoint:
@@ -63,7 +63,7 @@ services:
       - mastodon
 
   mastodon-sidekiq:
-    image: tootsuite/mastodon:v4.5
+    image: tootsuite/mastodon:{{ .Version }}
     entrypoint:
      - sh
      - -c

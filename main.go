@@ -178,13 +178,23 @@ func main() {
 	jRPCServer := NewJRPCServer()
 	jRPCServer.Logger = log.Default()
 
+	jRPCServer.Register("apps/list", rpcApplicationsList)
+	jRPCServer.Register("job/log", rpcJobLog)
 	jRPCServer.Register("inst/install", app.rpcInstanceInstall)
 	jRPCServer.Register("inst/uninstall", app.rpcInstanceUninstall)
 	jRPCServer.Register("inst/start", app.rpcInstanceStart)
 	jRPCServer.Register("inst/stop", app.rpcInstanceStop)
+
+	jRPCServer.Register("inst/expose", rpcInstanceExpose)
+	jRPCServer.Register("inst/hide", rpcInstanceHide)
+
 	jRPCServer.Register("inst/backup", app.rpcInstanceBackup)
 	jRPCServer.Register("inst/restore", app.rpcInstanceRestore)
+	jRPCServer.Register("inst/upgrade", app.rpcInstanceUpgrade)
+	// jRPCServer.Register("container/start", func() {})
+	// jRPCServer.Register("container/stop", func() {})
 
+	jRPCServer.reg.SaveSpecs("schema_jrpc.json")
 	mux := http.NewServeMux()
 
 	mux.Handle("/ws", jRPCServer.Handler())

@@ -19,13 +19,7 @@ go run ./
 
 Connect to a websocket on port 6006 and call these actions. Some examples (though incomplete) are in `jrpc.html`
 
-```
-inst/install - create new instance of an application (docker compose project for now)
-inst/start - start instance by instanceID
-inst/stop - stop instance by instanceID
-inst/backup - backup instance by instanceID
-inst/restore - restore instance by instanceID
-```
+There is a `schema_jrpc.json` file in the root folder. It is generated every server start.
 
 This is far from complete. Look at `rpc_handlers.go` for arguments and return values
 

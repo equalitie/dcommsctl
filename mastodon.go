@@ -2,74 +2,53 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"os/exec"
+	"os"
+	"path"
+	"text/template"
 	// "github.com/compose-spec/compose-go/v2/cli"
 )
 
-func mastodonPostInstall(ctx context.Context, app *GlobalState) error {
-	pass := "test_pass"
-	cmd := exec.CommandContext(ctx, "./mastodon_postinstall.sh")
-	cmd.Dir = app.systemCfg.DcommsConfFilesDir
-	cmd.Env = []string{
-		"MASTODON_ADMIN_PASS=" + pass,
-	}
-
-	output, err := cmd.CombinedOutput()
-
-	fmt.Println(string(output))
-
-	if err != nil {
-		return err
-	}
-
-	return nil
+type MastodonConfig struct {
+	Domain   string
+	PortOut  int
+	PortOut2 int
+	Version  string
 }
 
-// This is an test version of calling docker API from the bash script
-func mastodonDockerBackup(ctx context.Context, app *GlobalState) error {
-	// FIXME: figure out where we store that
-	backupRoot := "./.backup"
-	// FIXME: we need to store this somewhere and generate it dynamically
-	backupID := "tmp1"
+func mastodonCreateInstance(ctx context.Context, instancesDir string, config MastodonConfig) (string, error) {
+	pathToApp := path.Join("conf_tmpl", "peertube")
 
-	cmd := exec.CommandContext(ctx, "./docker_mastodon_backup.sh")
-	cmd.Dir = app.systemCfg.DcommsConfFilesDir
-	cmd.Env = []string{
-		"BACKUP_ROOT=" + backupRoot,
-		"BACKUP_ID=" + backupID,
-	}
-
-	output, err := cmd.CombinedOutput()
-
-	fmt.Println(string(output))
-
+	tmpl, err := template.ParseFiles(path.Join(pathToApp, "docker-compose.tmpl.yml"))
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return nil
-}
+	fileFlags := os.O_CREATE | os.O_EXCL | os.O_WRONLY
 
-// This is an test version of calling docker API from the bash script
-func mastodonDockerRestore(ctx context.Context, app *GlobalState, backupID string) error {
-	// FIXME: figure out where we store that
-	backupRoot := "./.backup"
+	pathToInst, err := instanceCreate(ctx, instancesDir, "mastodon")
 
-	cmd := exec.CommandContext(ctx, "./docker_mastodon_restore.sh")
-	cmd.Dir = app.systemCfg.DcommsConfFilesDir
-	cmd.Env = []string{
-		"BACKUP_ROOT=" + backupRoot,
-		"BACKUP_ID=" + backupID,
-	}
-
-	output, err := cmd.CombinedOutput()
-
-	fmt.Println(string(output))
-
+	composeFile, err := os.OpenFile(path.Join(pathToInst, "docker-compose.yml"), fileFlags, 0o644)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return nil
+	if err := tmpl.Execute(composeFile, &config); err != nil {
+		return "", err
+	}
+
+	envTmpl, err := template.ParseFiles(path.Join(pathToApp, "env"))
+	if err != nil {
+		return "", err
+	}
+
+	envFile, err := os.OpenFile(path.Join(pathToInst, "env"), fileFlags, 0o644)
+	if err != nil {
+		return "", err
+	}
+
+	if err := envTmpl.Execute(envFile, &config); err != nil {
+		return "", err
+	}
+
+	return pathToInst, nil
 }

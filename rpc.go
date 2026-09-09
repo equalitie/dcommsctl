@@ -8,7 +8,10 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"os"
 	"reflect"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,11 +26,17 @@ var (
 )
 
 type rpcFunc struct {
-	fn      reflect.Value
-	wantCtx bool
-	argType reflect.Type // nil when the function takes no args
+	fn         reflect.Value
+	wantCtx    bool
+	argType    reflect.Type
+	resultType reflect.Type
 }
 
+type rpcMethodSpec struct {
+	Name   string         `json:"name"`
+	Params map[string]any `json:"params"`
+	Result map[string]any `json:"result"`
+}
 type registry struct{ methods map[string]rpcFunc }
 
 func newRegistry() *registry { return &registry{methods: map[string]rpcFunc{}} }
@@ -36,14 +45,19 @@ func newRegistry() *registry { return &registry{methods: map[string]rpcFunc{}} }
 func (r *registry) register(name string, fn any) {
 	v := reflect.ValueOf(fn)
 	t := v.Type()
+
 	if t.Kind() != reflect.Func {
 		panic("rpcws: Register(" + name + "): not a function")
 	}
 	if t.NumOut() != 2 || t.Out(1) != errType {
 		panic("rpcws: Register(" + name + "): must return (result, error)")
 	}
-	var f rpcFunc
-	f.fn = v
+
+	f := rpcFunc{
+		fn:         v,
+		resultType: t.Out(0),
+	}
+
 	switch t.NumIn() {
 	case 0:
 	case 1:
@@ -61,7 +75,147 @@ func (r *registry) register(name string, fn any) {
 	default:
 		panic("rpcws: Register(" + name + "): want (), (args), (ctx), or (ctx, args)")
 	}
+
 	r.methods[name] = f
+}
+
+func schemaFor(t reflect.Type) any {
+	if t == nil {
+		return nil
+	}
+
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+
+	switch t.Kind() {
+	case reflect.Struct:
+		fields := make(map[string]any)
+
+		for i := 0; i < t.NumField(); i++ {
+			field := t.Field(i)
+
+			if !field.IsExported() {
+				continue
+			}
+
+			tag := field.Tag.Get("json")
+			name, options := parseJSONTag(tag)
+
+			if name == "-" {
+				continue
+			}
+			if name == "" {
+				name = field.Name
+			}
+
+			fieldSchema := schemaFor(field.Type)
+
+			if field.Anonymous && tag == "" {
+				if embedded, ok := fieldSchema.(map[string]any); ok {
+					for k, v := range embedded {
+						fields[k] = v
+					}
+					continue
+				}
+			}
+
+			if options["omitempty"] {
+				fields[name] = map[string]any{
+					"type":     fieldSchema,
+					"optional": true,
+				}
+			} else {
+				fields[name] = fieldSchema
+			}
+		}
+
+		return fields
+
+	case reflect.Slice, reflect.Array:
+		return map[string]any{
+			"type":  "array",
+			"items": schemaFor(t.Elem()),
+		}
+
+	case reflect.Map:
+		return map[string]any{
+			"type":   "object",
+			"values": schemaFor(t.Elem()),
+		}
+
+	case reflect.String:
+		return "string"
+
+	case reflect.Bool:
+		return "boolean"
+
+	case reflect.Int, reflect.Int8, reflect.Int16,
+		reflect.Int32, reflect.Int64:
+		return "integer"
+
+	case reflect.Uint, reflect.Uint8, reflect.Uint16,
+		reflect.Uint32, reflect.Uint64:
+		return "integer"
+
+	case reflect.Float32, reflect.Float64:
+		return "number"
+
+	case reflect.Interface:
+		return "any"
+
+	default:
+		return t.String()
+	}
+}
+
+func parseJSONTag(tag string) (string, map[string]bool) {
+	options := make(map[string]bool)
+
+	if tag == "" {
+		return "", options
+	}
+
+	parts := strings.Split(tag, ",")
+	for _, option := range parts[1:] {
+		options[option] = true
+	}
+
+	return parts[0], options
+}
+
+func (r *registry) Specs() []rpcMethodSpec {
+	specs := make([]rpcMethodSpec, 0, len(r.methods))
+
+	for name, method := range r.methods {
+		spec := rpcMethodSpec{Name: name}
+
+		if method.argType != nil {
+			spec.Params, _ = schemaFor(method.argType).(map[string]any)
+		}
+		if method.resultType != nil {
+			spec.Result, _ = schemaFor(method.resultType).(map[string]any)
+		}
+
+		specs = append(specs, spec)
+	}
+
+	sort.Slice(specs, func(i, j int) bool {
+		return specs[i].Name < specs[j].Name
+	})
+
+	return specs
+}
+
+func (r *registry) SaveSpecs(filename string) error {
+	data, err := json.MarshalIndent(r.Specs(), "", "  ")
+	if err != nil {
+		return err
+	}
+
+	data = append(data, '\n')
+
+	return os.WriteFile(filename, data, 0o644)
 }
 
 func (r *registry) call(ctx context.Context, name string, params *json.RawMessage) (any, error) {
