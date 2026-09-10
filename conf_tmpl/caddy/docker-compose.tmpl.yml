@@ -1,5 +1,9 @@
 networks:
   caddy:
+  metrics:
+    internal: true
+  dawa:
+    internal: true
   mastodon:
     internal: true
   mastodon_outbound:
@@ -26,6 +30,7 @@ services:
         target: /www
     networks:
       - caddy
+      - dawa
       - mastodon
       - synapse
       - element
