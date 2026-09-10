@@ -1,0 +1,5 @@
+{
+    "id": "peertube",
+    "name": "Peertube",
+    "redirect_uri": "/tmp_redirect"
+}
