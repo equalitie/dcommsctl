@@ -1,0 +1,86 @@
+sources:
+  host_metrics:
+    type: host_metrics
+    scrape_interval_secs: 30
+    collectors: ["cpu", "memory", "disk", "filesystem", "load", "host", "network"]
+    filesystem:
+      mountpoints:
+        excludes: ["*/run/credentials/*"]
+
+  host_logs:
+    type: file
+    include:
+      - /var/log/syslog
+      - /var/log/auth.log
+      - /var/log/kern.log
+      - /var/log/dpkg.log
+    exclude:
+      - /var/log/*.gz
+      - /var/log/lastlog
+      - /var/log/wtmp
+
+  container_logs:
+    type: docker_logs
+    exclude_containers:
+      - victorialogs
+      - victoriametrics
+      - logporter
+      - vector
+      - docker-proxy
+    include_labels:
+      - dc_app
+      - dc_version
+      - dc_inst
+      - dc_env
+
+transforms:
+  filter_container_logs:
+    type: filter
+    inputs:
+      - container_logs
+    condition: |
+      !contains(to_string(.message) ?? "", "GET /healthcheck") &&
+      !contains(to_string(.message) ?? "", "OPTIONS * HTTP/1.1") &&
+      !contains(to_string(.message) ?? "", "HEAD /healthcheck")
+
+  filter_host_logs:
+    type: filter
+    inputs:
+      - host_logs
+    condition: |
+      !includes(["dhclient", "cron"], to_string(.programname) ?? "") &&
+      !includes(["info", "debug"], to_string(.severity) ?? "") &&
+      !contains(to_string(.message) ?? "", "GET /healthcheck")
+
+sinks:
+  victorialogs_container:
+    type: http
+    inputs:
+      - filter_container_logs
+    uri: http://victorialogs:9428/insert/jsonline?_stream_fields=host,container_id,container_name,dc_app,dc_version,dc_env,dc_inst&_msg_field=message&_time_field=timestamp
+    encoding:
+      codec: json
+    framing:
+      method: newline_delimited
+    compression: gzip
+    healthcheck:
+      enabled: false
+  victorialogs_host:
+    type: http
+    inputs:
+      - filter_host_logs
+    uri: http://victorialogs:9428/insert/jsonline?_stream_fields=host,programname&_msg_field=message&_time_field=timestamp
+    encoding:
+      codec: json
+    framing:
+      method: newline_delimited
+    compression: gzip
+    healthcheck:
+      enabled: false
+  victoriametrics:
+    type: prometheus_remote_write
+    inputs:
+      - host_metrics
+    endpoint: "http://victoriametrics:8428/api/v1/write"
+    healthcheck:
+      enabled: false

@@ -4,40 +4,70 @@ services:
   dawa:
     image: dawa:latest
     container_name: dawa
-    env_file: ./env
-    ports:
-      - "{{ .PortOut }}:8080"
+    labels:
+      - "dc_app=internal"
+    expose:
+      - 3000
     environment:
       - RAILS_ENV=production
       - RAILS_LOG_LEVEL=debug
       - DEMO=true
       - DOCKER_URL=http://docker-proxy:2375
+      - METRICS_URL=http://victoriametrics:8428
+      - LOGS_URL=http://victorialogs:9428
       - PUBLIC_PROTOCOL=http
+      - SITE_TITLE
+      - SITE_DOMAIN
+      - SECRET_KEY_BASE
+      - SALT
+      - OPENID_PRIVATE_KEY
     volumes:
       - dawa_storage:/rails/storage
+    networks:
+      - dawa
+      - metrics
     deploy:
       resources:
         limits:
           cpus: 1
           memory: 1GB
 
+  # Proxy for docker api access
+  # Services needing docker api should connect to tcp://docker-proxy:2375
+  # For rootless with podman, see: https://github.com/linuxserver/docker-socket-proxy
   docker-proxy:
-    image: tecnativa/docker-socket-proxy:latest
+    image: lscr.io/linuxserver/socket-proxy:latest
     container_name: docker-proxy
+    labels:
+      - "dc_app=internal"
+    expose:
+      - 2375
     environment:
-      - CONTAINERS=1
-      - POST=1
-      - DELETE=1
-      - INFO=1
-      - VERSION=1
-      - LISTEN=0.0.0.0:2375
+      CONTAINERS: 1
+      IMAGES: 1
+      POST: 1
+      DELETE: 1
+      INFO: 1
+      VERSION: 1
+      ALLOW_LOGS: 1
+      # debug, info, notice, warning, err, crit, alert and emerg. defaults to info.
+      LOG_LEVEL: info
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - dawa
     read_only: true
     tmpfs:
       - /tmp
       - /run
+    group_add:
+      - "${DOCKER_GID:-984}"
 
 volumes:
   dawa_storage:
 
+networks:
+  dawa:
+    external: true
+  metrics:
+    external: true

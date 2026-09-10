@@ -1,0 +1,105 @@
+name: metrics
+
+services:
+  # time series metrics database
+  # a query ui is available at http://victoriametrics:8428/vmui
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:latest
+    container_name: victoriametrics
+    labels:
+      - "dc_app=internal"
+    restart: unless-stopped
+    expose:
+      - 8428
+    volumes:
+      - metrics_storage:/victoria-metrics-data
+      - ./promscrape.yml:/etc/vm/promscrape.yml:ro
+    networks:
+      - metrics
+    command:
+      - '-storageDataPath=/victoria-metrics-data'
+      - '-retentionPeriod=3M'
+      - '-promscrape.config=/etc/vm/promscrape.yml'
+      - '-httpListenAddr=:8428'
+      - '-memory.allowedPercent=60'
+      - '-search.maxQueryDuration=30s'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8428/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # centralized log database
+  victorialogs:
+    image: victoriametrics/victoria-logs:latest
+    container_name: victorialogs
+    labels:
+      - "dc_app=internal"
+    expose:
+      - 9428
+    volumes:
+      - log_storage:/victoria-logs-data
+    networks:
+      - metrics
+    command:
+      - "-storageDataPath=/victoria-logs-data"
+      - "-retentionPeriod=14d"
+      - "-httpListenAddr=:9428"
+    restart: unless-stopped
+
+  # vector is an all-in-one log/metric/trace pipeline processor.
+  # we use it to feed logs to victorialogs and host metrics to victoriametrics.
+  vector:
+    # image: timberio/vector:latest-alpine << if you need to debug with exec sh
+    image: timberio/vector:latest-distroless-static
+    container_name: vector
+    labels:
+      - "dc_app=internal"
+    volumes:
+      - ./vector.yml:/etc/vector/vector.yaml:ro
+      # To access Docker logs
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # To access host logs
+      - /var/log:/var/log:ro
+      # Provides process and system statistics
+      - /proc:/host/proc:ro
+      # Provides device and driver information
+      - /sys:/host/sys:ro
+      # Provides the root filesystem for disk usage metrics
+      - /:/host:ro
+    networks:
+      - metrics
+    depends_on:
+      - victorialogs
+      - victoriametrics
+    restart: unless-stopped
+
+  # exports container metrics with support for labels
+  # (despite the name, we don't use it for logs)
+  # logporter has a dashboard at http://logporter:9333
+  logporter:
+    image: lifailon/logporter:latest
+    container_name: logporter
+    labels:
+      - "dc_app=internal"
+    restart: always
+    expose:
+      - 9333
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - metrics
+    environment:
+      LOG_LEVEL: info
+      #DOCKER_HOST: tcp://docker-proxy:2375
+      DOCKER_METRICS_PORT: 9333
+      DOCKER_METRICS_CUSTOM_LABELS: "dc_app,dc_version,dc_inst,dc_env"
+
+volumes:
+  log_storage:
+  metrics_storage:
+
+networks:
+  metrics:
+    external: true
