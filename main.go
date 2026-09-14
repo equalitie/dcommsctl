@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path"
 	"path/filepath"
@@ -17,10 +16,6 @@ import (
 	"syscall"
 	"time"
 )
-
-// some concepts:
-//  - target (deployment target) is either VPS or cloud service
-//  - application is either docker compose project or docker swarm service
 
 const scriptGracePeriod = 20 * time.Second
 
@@ -76,24 +71,14 @@ type GlobalState struct {
 	targets     map[int]DeploymentTargetInfo
 	ctx         context.Context
 	systemCfg   SystemConfig
-	jobsManager JobManager
+	jobsManager *JobManager
 }
 
 func NewGlobalState() *GlobalState {
 	return &GlobalState{
-		targets: make(map[int]DeploymentTargetInfo),
+		targets:     make(map[int]DeploymentTargetInfo),
+		jobsManager: NewJobManager(),
 	}
-}
-
-func execCommand(ctx context.Context, t DeploymentTargetInfo, cmd string) error {
-	c := exec.Command(cmd)
-
-	_, err := c.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("error executing command: %s", err)
-	}
-
-	return nil
 }
 
 func instanceGenID() string {
@@ -180,6 +165,10 @@ func main() {
 
 	jRPCServer.Register("apps/list", rpcApplicationsList)
 	jRPCServer.Register("job/log", rpcJobLog)
+	jRPCServer.Register("job/status", app.rpcJobStatus)
+	jRPCServer.Register("jobs/list", app.rpcJobsList)
+
+	jRPCServer.Register("inst/list", app.rpcInstancesList)
 	jRPCServer.Register("inst/install", app.rpcInstanceInstall)
 	jRPCServer.Register("inst/uninstall", app.rpcInstanceUninstall)
 	jRPCServer.Register("inst/start", app.rpcInstanceStart)

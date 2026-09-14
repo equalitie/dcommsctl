@@ -65,11 +65,9 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			}, nil
 
 		}
-	case "internal":
-		{
-		}
 	case "mastodon":
 		{
+			return InstallInstanceResult{}, fmt.Errorf("Application installation is not implemented")
 		}
 	case "peertube":
 		{
@@ -98,7 +96,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			defer lockFile.Close()
 
 			pass := "test_pass"
-			cmd := exec.CommandContext(ctx, path.Join("conf_tmpl", "peertube", "install.sh"))
+			cmd := exec.CommandContext(ctx, path.Join(".", "conf_tmpl", "peertube", "install.sh"))
 			cmd.Dir = instanceDir
 			cmd.Env = []string{
 				"APP_DIR=" + instanceDir,
@@ -108,7 +106,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 				"OAUTH_CLIENT_SECRET=" + clientSecret,
 			}
 
-			if err := app.jobsManager.startExec(ctx, lockFilePath, jobID, cmd); err != nil {
+			if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobID, cmd); err != nil {
 				return InstallInstanceResult{}, err
 			}
 
@@ -149,7 +147,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 				"APP_DIR=" + instanceDir,
 			}
 
-			if err := app.jobsManager.startExec(ctx, lockFilePath, jobID, cmd); err != nil {
+			if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobID, cmd); err != nil {
 				return InstallInstanceResult{}, err
 			}
 
@@ -161,7 +159,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			}, nil
 		}
 	}
-	return InstallInstanceResult{}, nil
+	return InstallInstanceResult{}, fmt.Errorf("This application is not supported")
 }
 
 type RemoveAppArgs struct {
@@ -193,7 +191,7 @@ func (app *GlobalState) rpcInstanceUninstall(ctx context.Context, args RemoveApp
 	cmd := exec.CommandContext(ctx, "docker", cmdArgs...)
 	cmd.Dir = instanceDir
 
-	if err := app.jobsManager.startExec(ctx, lockFilePath, jobID, cmd); err != nil {
+	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobID, cmd); err != nil {
 		return InstanceUninstallResult{}, err
 	}
 
@@ -235,7 +233,7 @@ func (app *GlobalState) rpcInstanceStart(ctx context.Context, args InstanceStart
 	cmd := exec.CommandContext(ctx, "docker", cmdArgs...)
 	cmd.Dir = instanceDir
 
-	if err := app.jobsManager.startExec(ctx, lockFilePath, jobID, cmd); err != nil {
+	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobID, cmd); err != nil {
 		return InstanceStartResult{}, err
 	}
 
@@ -272,7 +270,7 @@ func (app *GlobalState) rpcInstanceStop(ctx context.Context, args InstanceStopAr
 
 	cmd := exec.CommandContext(ctx, "docker", cmdArgs...)
 	cmd.Dir = instanceDir
-	if err := app.jobsManager.startExec(ctx, lockFilePath, jobID, cmd); err != nil {
+	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobID, cmd); err != nil {
 		return InstanceStopResult{}, err
 	}
 
@@ -319,7 +317,7 @@ func (app *GlobalState) rpcInstanceBackup(ctx context.Context, args InstanceBack
 		"BACKUP_ID=" + backupID,
 		"APP_DIR=" + instanceDir,
 	}
-	if err := app.jobsManager.startExec(ctx, lockFilePath, jobID, cmd); err != nil {
+	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobID, cmd); err != nil {
 		return InstanceBackupResult{}, err
 	}
 
@@ -365,7 +363,7 @@ func (app *GlobalState) rpcInstanceRestore(ctx context.Context, args InstanceRes
 		"BACKUP_ID=" + backupID,
 		"APP_DIR=" + instanceDir,
 	}
-	if err := app.jobsManager.startExec(ctx, lockFilePath, jobID, cmd); err != nil {
+	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobID, cmd); err != nil {
 		return InstanceRestoreResult{}, err
 	}
 
@@ -400,6 +398,48 @@ func (app *GlobalState) rpcInstanceUpgrade(ctx context.Context, args InstanceUpg
 	return InstanceUpgradeResult{
 		JobID: jobID,
 	}, nil
+}
+
+type InstanceExposeArgs struct {
+	InstanceID string `json:"id"`
+}
+
+type InstanceExposeResult struct{}
+
+func rpcInstanceExpose(ctx context.Context, args InstanceExposeArgs) (InstanceExposeResult, error) {
+	return InstanceExposeResult{}, nil
+}
+
+type InstanceHideArgs struct {
+	InstanceID string `json:"id"`
+}
+
+type InstanceHideResult struct{}
+
+func rpcInstanceHide(ctx context.Context, args InstanceHideArgs) (InstanceHideResult, error) {
+	return InstanceHideResult{}, nil
+}
+
+type InstancesListArgs struct{}
+
+type InstancesListResult struct {
+	InstancesNames []string `json:""`
+}
+
+func (app *GlobalState) rpcInstancesList(ctx context.Context, args InstancesListArgs) (InstancesListResult, error) {
+	r := InstancesListResult{}
+	entries, err := os.ReadDir(app.systemCfg.InstancesDir)
+	if err != nil {
+		return InstancesListResult{}, err
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			r.InstancesNames = append(r.InstancesNames, entry.Name())
+		}
+	}
+
+	return r, nil
 }
 
 type ApplicationInfo struct {
@@ -439,6 +479,38 @@ func rpcApplicationsList(ctx context.Context) (ApplicationListResult, error) {
 	return r, nil
 }
 
+type JobsListArgs struct {
+	InstanceID string `json:"instance_id"`
+	ActiveOnly bool   `json:"active_only"`
+}
+
+type JobsListResult struct {
+	Jobs []JobStatus `json:"jobs"`
+}
+
+func (app *GlobalState) rpcJobsList(ctx context.Context, args JobsListArgs) (JobsListResult, error) {
+	instanceID := args.InstanceID
+	filterByInstance := instanceID != ""
+	r := JobsListResult{}
+	for _, j := range app.jobsManager.jobs {
+		if filterByInstance {
+			if j.status.InstanceID != instanceID {
+				continue
+			}
+		}
+
+		if args.ActiveOnly {
+			if !isJobActive(j.status.State) {
+				continue
+			}
+		}
+
+		r.Jobs = append(r.Jobs, j.status)
+	}
+
+	return r, nil
+}
+
 type JobLogArgs struct {
 	JobID `json:"id"`
 }
@@ -453,22 +525,12 @@ func rpcJobLog(ctx context.Context, args JobLogArgs) (JobLogResult, error) {
 	return r, nil
 }
 
-type InstanceExposeArgs struct {
-	InstanceID string `json:"id"`
+type JobStatusArgs struct {
+	JobID `json:"id"`
 }
 
-type InstanceExposeResult struct{}
+func (app *GlobalState) rpcJobStatus(ctx context.Context, args JobStatusArgs) (JobStatus, error) {
+	r := JobStatus{}
 
-func rpcInstanceExpose(ctx context.Context, args InstanceExposeArgs) (InstanceExposeResult, error) {
-	return InstanceExposeResult{}, nil
-}
-
-type InstanceHideArgs struct {
-	InstanceID string `json:"id"`
-}
-
-type InstanceHideResult struct{}
-
-func rpcInstanceHide(ctx context.Context, args InstanceHideArgs) (InstanceHideResult, error) {
-	return InstanceHideResult{}, nil
+	return r, nil
 }

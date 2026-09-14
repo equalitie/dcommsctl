@@ -37,6 +37,7 @@ type rpcMethodSpec struct {
 	Params map[string]any `json:"params"`
 	Result map[string]any `json:"result"`
 }
+
 type registry struct{ methods map[string]rpcFunc }
 
 func newRegistry() *registry { return &registry{methods: map[string]rpcFunc{}} }

@@ -53,6 +53,16 @@
     }
   },
   {
+    "name": "inst/list",
+    "params": {},
+    "result": {
+      "InstancesNames": {
+        "items": "string",
+        "type": "array"
+      }
+    }
+  },
+  {
     "name": "inst/restore",
     "params": {
       "id": "string"
@@ -104,6 +114,46 @@
     },
     "result": {
       "log": "string"
+    }
+  },
+  {
+    "name": "job/status",
+    "params": {
+      "id": "string"
+    },
+    "result": {
+      "bytes_written": "integer",
+      "error": "string",
+      "exit_code": "integer",
+      "finished_at": "string",
+      "id": "string",
+      "instance_id": "string",
+      "started_at": "string",
+      "state": "string",
+      "type": "string"
+    }
+  },
+  {
+    "name": "jobs/list",
+    "params": {
+      "active_only": "boolean",
+      "instance_id": "string"
+    },
+    "result": {
+      "jobs": {
+        "items": {
+          "bytes_written": "integer",
+          "error": "string",
+          "exit_code": "integer",
+          "finished_at": "string",
+          "id": "string",
+          "instance_id": "string",
+          "started_at": "string",
+          "state": "string",
+          "type": "string"
+        },
+        "type": "array"
+      }
     }
   }
 ]
