@@ -61,33 +61,6 @@ func dockerInspectContainers(ctx context.Context, cli *dockerClient.Client) erro
 	return nil
 }
 
-func sshDockerSend(ctx context.Context, t DeploymentTargetInfo, localAddr string) (*dockerClient.Client, error) {
-	// FIXME: this is the only function that sets up an SSH tunnel
-	if !t.SSHTunnelEstablished {
-		if err := sshTunnel(ctx, t, localAddr); err != nil {
-			return nil, err
-		}
-	}
-
-	containerClient, err := dockerClient.New(
-		dockerClient.FromEnv,
-		dockerClient.WithHost("tcp://"+localAddr),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to create docker client: %s", err)
-	}
-	defer containerClient.Close()
-
-	pingResult, err := containerClient.Ping(ctx, dockerClient.PingOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("Failed to ping docker client: %s", err)
-	}
-
-	fmt.Println("Docker API version", pingResult.APIVersion)
-
-	return containerClient, nil
-}
-
 func dockerRun(ctx context.Context, cli *dockerClient.Client, ctrID string, cmd []string) error {
 	createResp, err := cli.ExecCreate(ctx, ctrID, dockerClient.ExecCreateOptions{
 		Cmd:          cmd,
