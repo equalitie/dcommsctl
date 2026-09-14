@@ -88,6 +88,7 @@ func NewJobManager() *JobManager {
 }
 
 func (m *JobManager) run(ctx context.Context, rec *JobRecord, cmd *exec.Cmd) error {
+	jobID := rec.status.ID
 	f, err := os.OpenFile(rec.logFilePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
@@ -125,8 +126,13 @@ func (m *JobManager) run(ctx context.Context, rec *JobRecord, cmd *exec.Cmd) err
 		}
 	}()
 
-	rec.status.StartedAt = time.Now().Format(time.RFC3339)
-	rec.status.State = JobRunning
+	// TODO: get a better sync mechanism
+	m.mu.Lock()
+	tmpRec := m.jobs[jobID]
+	tmpRec.status.StartedAt = time.Now().Format(time.RFC3339)
+	tmpRec.status.State = JobRunning
+	m.jobs[jobID] = tmpRec
+	m.mu.Unlock()
 
 	if err := cmd.Start(); err != nil {
 		return err
@@ -150,12 +156,19 @@ func (m *JobManager) run(ctx context.Context, rec *JobRecord, cmd *exec.Cmd) err
 
 	err = cmd.Wait()
 
-	rec.status.State = JobDone
-	rec.status.FinishedAt = time.Now().Format(time.RFC3339)
-	rec.status.ExitCode = cmd.ProcessState.ExitCode()
+	m.mu.Lock()
+	tmpRec = m.jobs[jobID]
+	if err != nil {
+		tmpRec.status.State = JobFailed
+	} else {
+		tmpRec.status.State = JobDone
+	}
+	tmpRec.status.FinishedAt = time.Now().Format(time.RFC3339)
+	tmpRec.status.ExitCode = cmd.ProcessState.ExitCode()
+	m.jobs[jobID] = tmpRec
+	m.mu.Unlock()
 
 	if err != nil {
-		rec.status.State = JobFailed
 		return err
 	}
 
@@ -168,6 +181,7 @@ func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jo
 	jobCtx, cancel := context.WithCancel(ctx)
 	rec := &JobRecord{
 		status: JobStatus{
+			ID:         jobID,
 			State:      JobPending,
 			InstanceID: instanceID,
 		},

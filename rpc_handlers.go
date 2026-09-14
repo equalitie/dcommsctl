@@ -96,7 +96,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			defer lockFile.Close()
 
 			pass := "test_pass"
-			cmd := exec.CommandContext(ctx, path.Join(".", "conf_tmpl", "peertube", "install.sh"))
+			cmd := exec.CommandContext(ctx, path.Join(app.systemCfg.AppsDir, "peertube", "install.sh"))
 			cmd.Dir = instanceDir
 			cmd.Env = []string{
 				"APP_DIR=" + instanceDir,
@@ -140,7 +140,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 				return InstallInstanceResult{}, fmt.Errorf("The job is in progress")
 			}
 
-			cmd := exec.CommandContext(ctx, path.Join(app.systemCfg.ScriptsDir, "dawa_install.sh"))
+			cmd := exec.CommandContext(ctx, path.Join(app.systemCfg.AppsDir, "dawa", "install.sh"))
 			cmd.Dir = instanceDir
 			cmd.Env = []string{
 				"LOCK_FILE=" + lockFilePath,

@@ -26,7 +26,7 @@ type NetworkRequest struct {
 
 type SystemConfig struct {
 	DcommsConfFilesDir string
-	ScriptsDir         string
+	AppsDir            string
 	InstancesDir       string
 	BackupsDir         string
 }
@@ -157,7 +157,7 @@ func main() {
 
 	app.systemCfg.DcommsConfFilesDir, _ = filepath.Abs("./dcomms-docker-compose")
 	app.systemCfg.InstancesDir, _ = filepath.Abs("./.instances")
-	app.systemCfg.ScriptsDir, _ = filepath.Abs("./scripts")
+	app.systemCfg.AppsDir, _ = filepath.Abs("./conf_tmpl")
 	app.systemCfg.BackupsDir, _ = filepath.Abs("./.backups")
 
 	jRPCServer := NewJRPCServer()
