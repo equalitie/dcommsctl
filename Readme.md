@@ -23,6 +23,3 @@ There is a `schema_jrpc.json` file in the root folder. It is generated every ser
 
 This is far from complete. Look at `rpc_handlers.go` for arguments and return values
 
-# Toools to add
-
-* CreepPad
