@@ -44,31 +44,7 @@ const (
 	ContainerBackendPodman
 )
 
-// This is a deployment target info, either cloud or VPS, for now only VPS
-type DeploymentTargetInfo struct {
-	ID                   int
-	Remote               bool
-	SSHTunnelEstablished bool
-
-	User   string
-	Host   string
-	Port   string
-	Domain string
-	// folder where we store the dcomms repo
-	ProjectRoot      string
-	ContainerBackend ContainerBackendType
-	// do not want to deal with map
-	MatrixEnabled   bool
-	MauEnabled      bool
-	PeertubeEnabled bool
-	MastodonEnabled bool
-	CenoEnabled     bool
-}
-
 type GlobalState struct {
-	conn DeploymentTargetInfo
-	// int as key for persistent IDs
-	targets     map[int]DeploymentTargetInfo
 	ctx         context.Context
 	systemCfg   SystemConfig
 	jobsManager *JobManager
@@ -76,7 +52,6 @@ type GlobalState struct {
 
 func NewGlobalState() *GlobalState {
 	return &GlobalState{
-		targets:     make(map[int]DeploymentTargetInfo),
 		jobsManager: NewJobManager(),
 	}
 }
