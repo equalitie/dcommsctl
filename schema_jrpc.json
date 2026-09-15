@@ -133,7 +133,9 @@
   {
     "name": "job/log",
     "params": {
-      "id": "string"
+      "instance_id": "string",
+      "job_id": "string",
+      "offset": "integer"
     },
     "result": {
       "log": "string"

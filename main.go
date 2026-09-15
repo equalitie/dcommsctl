@@ -146,7 +146,7 @@ func main() {
 
 	jRPCServer.Register("app/list", rpcApplicationsList)
 
-	jRPCServer.Register("job/log", rpcJobLog)
+	jRPCServer.Register("job/log", app.rpcJobLog)
 	jRPCServer.Register("job/status", app.rpcJobStatus)
 	jRPCServer.Register("job/list", app.rpcJobsList)
 

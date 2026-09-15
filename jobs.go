@@ -98,7 +98,7 @@ func (m *JobManager) loadJobs() error {
 
 	err = json.Unmarshal(data, &tmp)
 	if err != nil {
-		return err
+		return fmt.Errorf("jobs_db file unmarshal error %s. Possibly old format", err)
 	}
 
 	m.mu.Lock()
@@ -123,22 +123,26 @@ func (m *JobManager) dumpJobs() error {
 	return nil
 }
 
-func (m *JobManager) fetchLog(jobID string, offset int64) error {
-	rec := m.jobs[jobID]
+func (m *JobManager) fetchLog(instanceID string, jobID string, offset int64) ([]byte, error) {
+	rec, found := m.jobs[instanceID+"-"+jobID]
+
+	if !found {
+		return nil, fmt.Errorf("Job not found for instance '%s' and job id '%s'", instanceID, jobID)
+	}
 
 	f, err := os.OpenFile(rec.LogFilePath, os.O_RDONLY, 0o644)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	stat, err := f.Stat()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	length := int64(64 * 1024)
 
 	if offset >= stat.Size() {
-		return nil
+		return nil, nil
 	}
 
 	if offset+length > stat.Size() {
@@ -149,15 +153,13 @@ func (m *JobManager) fetchLog(jobID string, offset int64) error {
 
 	n, err := f.ReadAt(buf, offset)
 	if err != nil && err != io.EOF {
-		return err
+		return nil, err
 	}
 
-	buf = buf[:n]
-
-	return nil
+	return buf[:n], nil
 }
 
-func (m *JobManager) run(ctx context.Context, rec *JobRecord, cmd *exec.Cmd) error {
+func (m *JobManager) run(rec *JobRecord, cmd *exec.Cmd) error {
 	jobID := rec.Status.ID
 	f, err := os.OpenFile(rec.LogFilePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
@@ -188,11 +190,17 @@ func (m *JobManager) run(ctx context.Context, rec *JobRecord, cmd *exec.Cmd) err
 
 		idx := strings.LastIndex(rec.LogFilePath, replacePart)
 
-		newLogName := strings.Replace(rec.LogFilePath, replacePart, ".log", idx)
+		finalLogName := strings.Replace(rec.LogFilePath, replacePart, ".log", idx)
 
-		if err := os.Rename(rec.LogFilePath, newLogName); err != nil {
+		if err := os.Rename(rec.LogFilePath, finalLogName); err != nil {
 			// FIXME: proper error handling
 			fmt.Println("moving job log file:", err)
+		} else {
+			m.mu.Lock()
+			tmpRec := m.jobs[rec.Status.InstanceID+"-"+jobID]
+			tmpRec.LogFilePath = finalLogName
+			m.jobs[jobID] = tmpRec
+			m.mu.Unlock()
 		}
 	}()
 
@@ -261,7 +269,7 @@ func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jo
 	m.mu.Unlock()
 
 	go func() {
-		if err := m.run(jobCtx, rec, cmd); err != nil {
+		if err := m.run(rec, cmd); err != nil {
 			fmt.Println("job failed", err)
 		}
 	}()
