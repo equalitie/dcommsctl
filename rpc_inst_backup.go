@@ -46,7 +46,7 @@ func (app *GlobalState) rpcInstanceBackup(ctx context.Context, args InstanceBack
 		"BACKUP_ID=" + backupID,
 		"APP_DIR=" + instanceDir,
 	}
-	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobID, cmd); err != nil {
+	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
 		return InstanceBackupResult{}, err
 	}
 

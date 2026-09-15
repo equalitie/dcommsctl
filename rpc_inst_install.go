@@ -104,7 +104,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 				"OAUTH_CLIENT_SECRET=" + clientSecret,
 			}
 
-			if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobID, cmd); err != nil {
+			if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
 				return InstallInstanceResult{}, err
 			}
 
@@ -145,7 +145,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 				"APP_DIR=" + instanceDir,
 			}
 
-			if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobID, cmd); err != nil {
+			if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
 				return InstallInstanceResult{}, err
 			}
 

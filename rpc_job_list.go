@@ -17,18 +17,18 @@ func (app *GlobalState) rpcJobsList(ctx context.Context, args JobsListArgs) (Job
 	r := JobsListResult{}
 	for _, j := range app.jobsManager.jobs {
 		if filterByInstance {
-			if j.status.InstanceID != instanceID {
+			if j.Status.InstanceID != instanceID {
 				continue
 			}
 		}
 
 		if args.ActiveOnly {
-			if !isJobActive(j.status.State) {
+			if !isJobActive(j.Status.State) {
 				continue
 			}
 		}
 
-		r.Jobs = append(r.Jobs, j.status)
+		r.Jobs = append(r.Jobs, j.Status)
 	}
 
 	return r, nil

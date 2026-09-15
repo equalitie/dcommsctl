@@ -1,8 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -41,22 +41,19 @@ type JobStatus struct {
 }
 
 type JobRecord struct {
-	status       JobStatus
+	Status       JobStatus
 	ctx          context.Context
 	cancel       context.CancelFunc
-	lockFilePath string
-	logFilePath  string
+	LockFilePath string `json:"lock_file_path"`
+	LogFilePath  string `json:"log_file_path"`
 }
 
 type JobManager struct {
-	path string
-	sem  chan struct{}
-
 	mu sync.RWMutex
 
 	jobs map[string]*JobRecord
 
-	wg sync.WaitGroup
+	jobsDBpath string
 }
 
 func isJobActive(s JobState) bool {
@@ -87,9 +84,82 @@ func NewJobManager() *JobManager {
 	}
 }
 
+func (m *JobManager) loadJobs() error {
+	data, err := os.ReadFile(m.jobsDBpath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			// did not find the file, move on
+			return nil
+		}
+		return err
+	}
+
+	var tmp map[string]*JobRecord
+
+	err = json.Unmarshal(data, &tmp)
+	if err != nil {
+		return err
+	}
+
+	m.mu.Lock()
+	m.jobs = tmp
+	m.mu.Unlock()
+
+	return nil
+}
+
+func (m *JobManager) dumpJobs() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	d, err := json.MarshalIndent(m.jobs, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(m.jobsDBpath, d, 0o644); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *JobManager) fetchLog(jobID string, offset int64) error {
+	rec := m.jobs[jobID]
+
+	f, err := os.OpenFile(rec.LogFilePath, os.O_RDONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	stat, err := f.Stat()
+	if err != nil {
+		return err
+	}
+
+	length := int64(64 * 1024)
+
+	if offset >= stat.Size() {
+		return nil
+	}
+
+	if offset+length > stat.Size() {
+		length = stat.Size() - offset
+	}
+
+	buf := make([]byte, length)
+
+	n, err := f.ReadAt(buf, offset)
+	if err != nil && err != io.EOF {
+		return err
+	}
+
+	buf = buf[:n]
+
+	return nil
+}
+
 func (m *JobManager) run(ctx context.Context, rec *JobRecord, cmd *exec.Cmd) error {
-	jobID := rec.status.ID
-	f, err := os.OpenFile(rec.logFilePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	jobID := rec.Status.ID
+	f, err := os.OpenFile(rec.LogFilePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}
@@ -112,15 +182,15 @@ func (m *JobManager) run(ctx context.Context, rec *JobRecord, cmd *exec.Cmd) err
 	}
 
 	defer func() {
-		os.Remove(rec.lockFilePath)
+		os.Remove(rec.LockFilePath)
 
 		replacePart := ".partial.log"
 
-		idx := strings.LastIndex(rec.logFilePath, replacePart)
+		idx := strings.LastIndex(rec.LogFilePath, replacePart)
 
-		newLogName := strings.Replace(rec.logFilePath, replacePart, ".log", idx)
+		newLogName := strings.Replace(rec.LogFilePath, replacePart, ".log", idx)
 
-		if err := os.Rename(rec.logFilePath, newLogName); err != nil {
+		if err := os.Rename(rec.LogFilePath, newLogName); err != nil {
 			// FIXME: proper error handling
 			fmt.Println("moving job log file:", err)
 		}
@@ -128,72 +198,65 @@ func (m *JobManager) run(ctx context.Context, rec *JobRecord, cmd *exec.Cmd) err
 
 	// TODO: get a better sync mechanism
 	m.mu.Lock()
-	tmpRec := m.jobs[jobID]
-	tmpRec.status.StartedAt = time.Now().Format(time.RFC3339)
-	tmpRec.status.State = JobRunning
+	tmpRec := m.jobs[rec.Status.InstanceID+"-"+jobID]
+	tmpRec.Status.StartedAt = time.Now().Format(time.RFC3339)
+	tmpRec.Status.State = JobRunning
 	m.jobs[jobID] = tmpRec
 	m.mu.Unlock()
+
+	if err := m.dumpJobs(); err != nil {
+		return err
+	}
 
 	if err := cmd.Start(); err != nil {
 		return err
 	}
 
-	batcher := NewLogBatcher(256)
-
-	go func() {
-		err := batcher.run(ctx, 100*time.Millisecond, func(batch LogBatch) error {
-			// TODO: figure out how do we notify client
-			return nil
-		})
-		if err != nil && !errors.Is(err, context.Canceled) {
-			fmt.Println("log batcher:", err)
-		}
-	}()
-
-	// TODO: process stdout and push notifications through jsonrpc
-
-	defer batcher.Complete(ctx)
-
-	err = cmd.Wait()
+	cmdExecErr := cmd.Wait()
 
 	m.mu.Lock()
-	tmpRec = m.jobs[jobID]
-	if err != nil {
-		tmpRec.status.State = JobFailed
+	tmpRec = m.jobs[rec.Status.InstanceID+"-"+jobID]
+	if cmdExecErr != nil {
+		tmpRec.Status.State = JobFailed
 	} else {
-		tmpRec.status.State = JobDone
+		tmpRec.Status.State = JobDone
 	}
-	tmpRec.status.FinishedAt = time.Now().Format(time.RFC3339)
-	tmpRec.status.ExitCode = cmd.ProcessState.ExitCode()
-	m.jobs[jobID] = tmpRec
+	tmpRec.Status.FinishedAt = time.Now().Format(time.RFC3339)
+	tmpRec.Status.ExitCode = cmd.ProcessState.ExitCode()
+	m.jobs[rec.Status.InstanceID+"-"+jobID] = tmpRec
 	m.mu.Unlock()
 
-	if err != nil {
+	if err := m.dumpJobs(); err != nil {
 		return err
+	}
+
+	if cmdExecErr != nil {
+		return cmdExecErr
 	}
 
 	return nil
 }
 
-func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jobID string, cmd *exec.Cmd) error {
+func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jobType, jobID string, cmd *exec.Cmd) error {
 	logFilePath := filepath.Join(cmd.Dir, "jobs", jobID+".partial.log")
 
 	jobCtx, cancel := context.WithCancel(ctx)
 	rec := &JobRecord{
-		status: JobStatus{
+		Status: JobStatus{
 			ID:         jobID,
 			State:      JobPending,
 			InstanceID: instanceID,
+			Type:       jobType,
 		},
 		ctx:          jobCtx,
 		cancel:       cancel,
-		lockFilePath: lockFilePath,
-		logFilePath:  logFilePath,
+		LockFilePath: lockFilePath,
+		LogFilePath:  logFilePath,
 	}
 
 	m.mu.Lock()
 
-	m.jobs[jobID] = rec
+	m.jobs[instanceID+"-"+jobID] = rec
 
 	m.mu.Unlock()
 
@@ -204,108 +267,6 @@ func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jo
 	}()
 
 	return nil
-}
-
-func (m *JobManager) log(instancePath string, jobName string) {
-	partialPath := filepath.Join(instancePath, "jobs", jobName+".partial.log")
-
-	f, err := os.OpenFile(partialPath, os.O_RDONLY, 0o644)
-	if err != nil {
-		if os.IsNotExist(err) {
-			fullPath := filepath.Join(instancePath, "jobs", jobName+".log")
-
-			f, err := os.OpenFile(fullPath, os.O_RDONLY, 0o644)
-			if err != nil {
-				return
-			}
-
-			defer f.Close()
-		}
-		return
-	}
-	defer f.Close()
-}
-
-type LogBatch struct {
-	Data  []byte
-	Final bool
-}
-
-type batchEvent struct {
-	data  []byte
-	final bool
-}
-
-type LogBatcher struct {
-	events chan batchEvent
-}
-
-func NewLogBatcher(bufferSize int) *LogBatcher {
-	return &LogBatcher{
-		events: make(chan batchEvent, bufferSize),
-	}
-}
-
-func (b *LogBatcher) Publish(ctx context.Context, data []byte) error {
-	data = bytes.Clone(data)
-
-	select {
-
-	case b.events <- batchEvent{data: data}:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (b *LogBatcher) Complete(ctx context.Context) error {
-	select {
-	case b.events <- batchEvent{final: true}:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (b *LogBatcher) run(ctx context.Context, interval time.Duration, send func(LogBatch) error) error {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	var pending bytes.Buffer
-
-	flush := func(final bool) error {
-		if pending.Len() == 0 && !final {
-			return nil
-		}
-
-		data := bytes.Clone(pending.Bytes())
-		pending.Reset()
-		return send(LogBatch{
-			Data:  data,
-			Final: final,
-		})
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-
-		case event := <-b.events:
-			if len(event.data) > 0 {
-				_, _ = pending.Write(event.data)
-			}
-
-			if event.final {
-				return flush(true)
-			}
-
-		case <-ticker.C:
-			if err := flush(false); err != nil {
-				return err
-			}
-		}
-	}
 }
 
 var instanceNames = []string{

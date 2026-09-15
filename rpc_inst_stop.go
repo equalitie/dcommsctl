@@ -35,7 +35,7 @@ func (app *GlobalState) rpcInstanceStop(ctx context.Context, args InstanceStopAr
 
 	cmd := exec.CommandContext(ctx, "docker", cmdArgs...)
 	cmd.Dir = instanceDir
-	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobID, cmd); err != nil {
+	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
 		return InstanceStopResult{}, err
 	}
 

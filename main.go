@@ -130,6 +130,12 @@ func main() {
 	)
 	defer stop()
 
+	app.jobsManager.jobsDBpath, _ = filepath.Abs("./.jobs_db.json")
+
+	if err := app.jobsManager.loadJobs(); err != nil {
+		panic(err)
+	}
+
 	app.systemCfg.DcommsConfFilesDir, _ = filepath.Abs("./dcomms-docker-compose")
 	app.systemCfg.InstancesDir, _ = filepath.Abs("./.instances")
 	app.systemCfg.AppsDir, _ = filepath.Abs("./conf_tmpl")

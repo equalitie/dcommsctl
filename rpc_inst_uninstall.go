@@ -36,7 +36,7 @@ func (app *GlobalState) rpcInstanceUninstall(ctx context.Context, args InstanceU
 	cmd := exec.CommandContext(ctx, "docker", cmdArgs...)
 	cmd.Dir = instanceDir
 
-	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobID, cmd); err != nil {
+	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
 		return InstanceUninstallResult{}, err
 	}
 
