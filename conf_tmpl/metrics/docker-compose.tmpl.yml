@@ -49,10 +49,11 @@ services:
     restart: unless-stopped
 
   # vector is an all-in-one log/metric/trace pipeline processor.
-  # we use it to feed logs to victorialogs and host metrics to victoriametrics.
+  # we use it to feed logs to victorialogs and metrics to victoriametrics.
   vector:
-    # image: timberio/vector:latest-alpine << if you need to debug with exec sh
-    image: timberio/vector:latest-distroless-static
+    # The Debian-based image ships with journalctl, which Vector's
+    # journald source requires (the *-distroless-static image does not include journalctl).
+    image: timberio/vector:latest-debian
     container_name: vector
     labels:
       - "dc_app=internal"
@@ -62,6 +63,12 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # To access host logs
       - /var/log:/var/log:ro
+      # To read the host's systemd journal (journald source)
+      - /run/log/journal:/run/log/journal:ro
+      - /var/log/journal:/var/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
+      # Checkpoint/state for the journald source's data_dir
+      - vector_data:/var/lib/vector
       # Provides process and system statistics
       - /proc:/host/proc:ro
       # Provides device and driver information
@@ -70,9 +77,17 @@ services:
       - /:/host:ro
     networks:
       - metrics
+    environment:
+      VECTOR_LOG: info
+    group_add:
+      # `journalctl` needs membership in the host's systemd-journal group to read the journal.
+      # Files are mode 0640 owned by root:systemd-journal, so the sandboxed user needs that gid.
+      # Override in .env if the host's systemd-journal group has a different numeric gid.
+      - "${SYSTEMD_JOURNAL_GID:-984}"
     depends_on:
       - victorialogs
       - victoriametrics
+      - logporter
     restart: unless-stopped
 
   # exports container metrics with support for labels
