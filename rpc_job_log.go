@@ -1,11 +1,13 @@
 package main
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 type JobLogArgs struct {
-	JobID      string `json:"job_id"`
-	InstanceID string `json:"instance_id"`
-	Offset     int64  `json:"offset"`
+	JobID  string `json:"id"`
+	Offset int64  `json:"offset"`
 }
 
 type JobLogResult struct {
@@ -15,7 +17,12 @@ type JobLogResult struct {
 func (app *GlobalState) rpcJobLog(ctx context.Context, args JobLogArgs) (JobLogResult, error) {
 	r := JobLogResult{}
 
-	d, err := app.jobsManager.fetchLog(args.InstanceID, args.JobID, args.Offset)
+	instanceID, found := app.jobsManager.instanceIDForJob(args.JobID)
+	if !found {
+		return JobLogResult{}, fmt.Errorf("unknown job: %s", args.JobID)
+	}
+
+	d, err := app.jobsManager.fetchLog(instanceID, args.JobID, args.Offset)
 	if err != nil {
 		return JobLogResult{}, err
 	}
