@@ -144,7 +144,7 @@ func main() {
 	jRPCServer := NewJRPCServer()
 	jRPCServer.Logger = log.Default()
 
-	jRPCServer.Register("app/list", rpcApplicationsList)
+	jRPCServer.Register("apps/list", rpcApplicationsList)
 
 	jRPCServer.Register("job/log", app.rpcJobLog)
 	jRPCServer.Register("job/status", app.rpcJobStatus)
