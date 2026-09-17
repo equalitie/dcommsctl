@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"math/rand/v2"
 	"net"
 	"net/http"
@@ -120,6 +120,8 @@ func crashLogInit() {
 }
 
 func main() {
+	initLogging()
+
 	serverError := make(chan error, 1)
 	app := NewGlobalState()
 
@@ -142,7 +144,7 @@ func main() {
 	app.systemCfg.BackupsDir, _ = filepath.Abs("./.backups")
 
 	jRPCServer := NewJRPCServer()
-	jRPCServer.Logger = log.Default()
+	jRPCServer.Logger = slog.Default()
 
 	jRPCServer.Register("apps/list", rpcApplicationsList)
 
@@ -184,28 +186,39 @@ func main() {
 		IdleTimeout:  5 * time.Second,
 		BaseContext:  func(net.Listener) context.Context { return rootContext },
 	}
+
+	// Bind explicitly rather than letting ListenAndServe do it, so the address we
+	// actually got (port 0 or a taken port would otherwise be guesswork) can be
+	// logged before serving starts.
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		logFatal("cannot listen", "address", addr, "err", err)
+	}
+
+	logInfo("listening", "address", listener.Addr().String(), "ws_endpoint", listener.Addr().String()+"/ws")
+
 	go func() {
-		if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+		if err := server.Serve(listener); !errors.Is(err, http.ErrServerClosed) {
 			serverError <- err
 		}
 	}()
 
 	select {
 	case err := <-serverError:
-		log.Printf("HTTP server error: %s", err)
+		logError("HTTP server error", "err", err)
 	case <-rootContext.Done():
-		log.Printf("shutdown requested (%v); wayting for %s grace period for scripts",
-			context.Cause(rootContext), scriptGracePeriod)
+		logInfo("shutdown requested",
+			"cause", context.Cause(rootContext), "script_grace_period", scriptGracePeriod)
 		stop()
 	}
 
-	log.Println("Shutting down the server...")
+	logInfo("shutting down the server")
 	ctx, cancel := context.WithTimeout(rootContext, 15*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		log.Printf("Server shutdown error: %s", err)
+		logError("server shutdown error", "err", err)
 	}
 
-	log.Println("Server shut down properly")
+	logInfo("server shut down properly")
 }

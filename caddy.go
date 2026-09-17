@@ -77,7 +77,10 @@ func caddySendRequest(ctx context.Context, endpoint string, method string, paylo
 		return err
 	}
 
-	fmt.Println(body)
+	// Caddy's reply body; a non-2xx status is worth seeing here since the caller only
+	// gets an error when the request itself fails.
+	logJSON("caddy response", body,
+		"endpoint", endpoint, "status", resp.StatusCode)
 
 	return nil
 }

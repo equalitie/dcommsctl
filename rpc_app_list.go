@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path"
 )
@@ -31,12 +30,12 @@ func rpcApplicationsList(ctx context.Context) (ApplicationListResult, error) {
 	for _, p := range apps {
 		data, err := os.ReadFile(path.Join("conf_tmpl", p, "config.json"))
 		if err != nil {
-			fmt.Println(err)
+			logError("cannot read app config", "app", p, "err", err)
 		}
 		app := ApplicationInfo{}
 
 		if err := json.Unmarshal(data, &app); err != nil {
-			fmt.Println(err)
+			logError("cannot parse app config", "app", p, "err", err)
 		}
 
 		r.Applications = append(r.Applications, app)
