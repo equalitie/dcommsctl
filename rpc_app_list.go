@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log"
 	"os"
 	"path"
 )
@@ -29,14 +29,24 @@ func rpcApplicationsList(ctx context.Context) (ApplicationListResult, error) {
 	r := ApplicationListResult{}
 
 	for _, p := range apps {
-		data, err := os.ReadFile(path.Join("conf_tmpl", p, "config.json"))
+		configPath := path.Join("conf_tmpl", p, "config.json")
+
+		data, err := os.ReadFile(configPath)
 		if err != nil {
-			fmt.Println(err)
+			log.Printf("apps/list: skipping %s: %s", p, err)
+			continue
 		}
+
 		app := ApplicationInfo{}
 
 		if err := json.Unmarshal(data, &app); err != nil {
-			fmt.Println(err)
+			log.Printf("apps/list: skipping %s: %s", p, err)
+			continue
+		}
+
+		if app.Id == "" || app.Name == "" {
+			log.Printf("apps/list: skipping %s: %s has no id or no name", p, configPath)
+			continue
 		}
 
 		r.Applications = append(r.Applications, app)
