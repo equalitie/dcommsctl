@@ -68,6 +68,13 @@ func jobID(jobType string) string {
 	)
 }
 
+// jobKey is how a job is indexed in JobManager.jobs. Every read and write must
+// go through it: indexing the same job under two different keys leaves the map
+// holding it twice, which job/list then reports as duplicates.
+func jobKey(instanceID, jobID string) string {
+	return instanceID + "-" + jobID
+}
+
 func jobLockFile(lockPath string) *os.File {
 	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
@@ -140,7 +147,7 @@ func (m *JobManager) statusByID(id string) (JobStatus, bool) {
 }
 
 func (m *JobManager) fetchLog(instanceID string, jobID string, offset int64) ([]byte, error) {
-	rec, found := m.jobs[instanceID+"-"+jobID]
+	rec, found := m.jobs[jobKey(instanceID, jobID)]
 
 	if !found {
 		return nil, fmt.Errorf("Job not found for instance '%s' and job id '%s'", instanceID, jobID)
@@ -213,19 +220,19 @@ func (m *JobManager) run(rec *JobRecord, cmd *exec.Cmd) error {
 			fmt.Println("moving job log file:", err)
 		} else {
 			m.mu.Lock()
-			tmpRec := m.jobs[rec.Status.InstanceID+"-"+jobID]
+			key := jobKey(rec.Status.InstanceID, jobID)
+			tmpRec := m.jobs[key]
 			tmpRec.LogFilePath = finalLogName
-			m.jobs[jobID] = tmpRec
+			m.jobs[key] = tmpRec
 			m.mu.Unlock()
 		}
 	}()
 
 	// TODO: get a better sync mechanism
 	m.mu.Lock()
-	tmpRec := m.jobs[rec.Status.InstanceID+"-"+jobID]
+	tmpRec := m.jobs[jobKey(rec.Status.InstanceID, jobID)]
 	tmpRec.Status.StartedAt = time.Now().Format(time.RFC3339)
 	tmpRec.Status.State = JobRunning
-	m.jobs[jobID] = tmpRec
 	m.mu.Unlock()
 
 	if err := m.dumpJobs(); err != nil {
@@ -239,7 +246,7 @@ func (m *JobManager) run(rec *JobRecord, cmd *exec.Cmd) error {
 	cmdExecErr := cmd.Wait()
 
 	m.mu.Lock()
-	tmpRec = m.jobs[rec.Status.InstanceID+"-"+jobID]
+	tmpRec = m.jobs[jobKey(rec.Status.InstanceID, jobID)]
 	if cmdExecErr != nil {
 		tmpRec.Status.State = JobFailed
 	} else {
@@ -247,7 +254,6 @@ func (m *JobManager) run(rec *JobRecord, cmd *exec.Cmd) error {
 	}
 	tmpRec.Status.FinishedAt = time.Now().Format(time.RFC3339)
 	tmpRec.Status.ExitCode = cmd.ProcessState.ExitCode()
-	m.jobs[rec.Status.InstanceID+"-"+jobID] = tmpRec
 	m.mu.Unlock()
 
 	if err := m.dumpJobs(); err != nil {
@@ -280,7 +286,7 @@ func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jo
 
 	m.mu.Lock()
 
-	m.jobs[instanceID+"-"+jobID] = rec
+	m.jobs[jobKey(instanceID, jobID)] = rec
 
 	m.mu.Unlock()
 
