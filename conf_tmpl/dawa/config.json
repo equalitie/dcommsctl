@@ -2,6 +2,15 @@
     "id": "dawa",
     "name": "DAWA",
     "version": "0.0.1",
-    "redirect_uri": "/tmp_redirect"
+    "redirect_uri": "/tmp_redirect",
+    "description": "Web interface for installing and managing dComms applications.",
+    "long_description": "Dawa is the admin interface for a dComms host. It talks to dcommsctl over a JSON-RPC WebSocket to install applications from this catalog, start and stop them, take backups, and follow the progress of long-running jobs.\n\nIt also acts as the OpenID Connect provider for the applications it installs, so an administrator signs in once and the installed applications delegate authentication back to Dawa.\n\nDawa is installed automatically as part of the dComms host rather than being something an administrator normally adds from the catalog.",
+    "upstream_url": "https://gitlab.equalit.ie/dcomms/dawa",
+    "definition_url": "https://gitlab.equalit.ie/dcomms/dcommsctl/-/tree/main/conf_tmpl/dawa",
+    "updated_at": "2026-09-14T23:08:31+02:00",
+    "releases": [
+        {
+            "version": "0.0.1"
+        }
+    ]
 }
-

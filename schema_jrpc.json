@@ -1,13 +1,67 @@
 [
   {
+    "name": "apps/get",
+    "params": {
+      "id": "string"
+    },
+    "result": {
+      "definition_url": {
+        "optional": true,
+        "type": "string"
+      },
+      "description": {
+        "optional": true,
+        "type": "string"
+      },
+      "id": "string",
+      "long_description": {
+        "optional": true,
+        "type": "string"
+      },
+      "name": "string",
+      "redirect_uri": "string",
+      "releases": {
+        "items": {
+          "changelog": {
+            "optional": true,
+            "type": "string"
+          },
+          "released_at": {
+            "optional": true,
+            "type": "string"
+          },
+          "version": "string"
+        },
+        "type": "array"
+      },
+      "updated_at": {
+        "optional": true,
+        "type": "string"
+      },
+      "upstream_url": {
+        "optional": true,
+        "type": "string"
+      },
+      "version": "string"
+    }
+  },
+  {
     "name": "apps/list",
     "params": null,
     "result": {
       "applications": {
         "items": {
+          "description": {
+            "optional": true,
+            "type": "string"
+          },
           "id": "string",
           "name": "string",
           "redirect_uri": "string",
+          "updated_at": {
+            "optional": true,
+            "type": "string"
+          },
           "version": "string"
         },
         "type": "array"

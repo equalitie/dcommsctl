@@ -1,5 +1,12 @@
 {
     "id": "mastodon",
     "name": "Mastodon",
-    "redirect_uri": "/auth/auth/openid_connect/callback"
+    "version": "4.5",
+    "redirect_uri": "/auth/auth/openid_connect/callback",
+    "description": "Federated microblogging server.",
+    "long_description": "Mastodon is a self-hosted social network server. An installation is a single community with its own rules and moderators, federating with the wider network over ActivityPub so its members can follow accounts hosted anywhere else.\n\nThis definition installs the Mastodon web and streaming services with PostgreSQL and Redis.\n\nNote that installing Mastodon is not wired up in dcommsctl yet: the catalog lists it, but inst/install returns an error for this application.",
+    "upstream_url": "https://joinmastodon.org",
+    "definition_url": "https://gitlab.equalit.ie/dcomms/dcommsctl/-/tree/main/conf_tmpl/mastodon",
+    "updated_at": "2026-09-14T23:51:07+02:00",
+    "releases": []
 }

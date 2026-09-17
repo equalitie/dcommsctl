@@ -1,5 +1,12 @@
 {
     "id": "peertube",
     "name": "Peertube",
-    "redirect_uri": "/tmp_redirect"
+    "version": "production-bookworm",
+    "redirect_uri": "/tmp_redirect",
+    "description": "Federated video hosting, streaming and live broadcasting.",
+    "long_description": "PeerTube is a free, decentralized video platform. Each installation is its own site with its own moderation rules, and federates with the rest of the network over ActivityPub, so viewers on one instance can follow and comment on channels hosted by another.\n\nVideo delivery uses WebTorrent to share bandwidth between viewers, which keeps hosting costs manageable for a self-hosted instance serving a large audience.\n\nThis definition installs PeerTube with PostgreSQL and Redis, and publishes the web interface plus the RTMP endpoint used for live streaming.",
+    "upstream_url": "https://joinpeertube.org",
+    "definition_url": "https://gitlab.equalit.ie/dcomms/dcommsctl/-/tree/main/conf_tmpl/peertube",
+    "updated_at": "2026-09-14T23:14:25+02:00",
+    "releases": []
 }

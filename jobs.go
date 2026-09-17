@@ -146,9 +146,7 @@ func (m *JobManager) statusByID(id string) (JobStatus, bool) {
 	return JobStatus{}, false
 }
 
-// instanceIDForJob resolves which instance a job belongs to from its bare id.
-// The jobs map is keyed by "instanceID-jobID", but a client polling job/log only
-// has the bare id -- the same asymmetry statusByID exists to bridge.
+// Resolves which instance a job belongs to from its bare id.
 func (m *JobManager) instanceIDForJob(id string) (string, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
