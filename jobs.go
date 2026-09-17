@@ -123,6 +123,22 @@ func (m *JobManager) dumpJobs() error {
 	return nil
 }
 
+// statusByID looks up a job by its bare id (the value handed back to clients as
+// job_id), independent of which instance it belongs to. The jobs map is keyed
+// by "instanceID-jobID", but a caller polling job/status only has the bare id.
+func (m *JobManager) statusByID(id string) (JobStatus, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, rec := range m.jobs {
+		if rec.Status.ID == id {
+			return rec.Status, true
+		}
+	}
+
+	return JobStatus{}, false
+}
+
 func (m *JobManager) fetchLog(instanceID string, jobID string, offset int64) ([]byte, error) {
 	rec, found := m.jobs[instanceID+"-"+jobID]
 

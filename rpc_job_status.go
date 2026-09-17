@@ -1,13 +1,19 @@
 package main
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 type JobStatusArgs struct {
 	JobID `json:"id"`
 }
 
 func (app *GlobalState) rpcJobStatus(ctx context.Context, args JobStatusArgs) (JobStatus, error) {
-	r := JobStatus{}
+	status, found := app.jobsManager.statusByID(string(args.JobID))
+	if !found {
+		return JobStatus{}, fmt.Errorf("unknown job: %s", args.JobID)
+	}
 
-	return r, nil
+	return status, nil
 }
