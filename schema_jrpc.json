@@ -1,6 +1,6 @@
 [
   {
-    "name": "app/list",
+    "name": "apps/list",
     "params": null,
     "result": {
       "applications": {
@@ -56,8 +56,14 @@
     "name": "inst/list",
     "params": {},
     "result": {
-      "InstancesNames": {
-        "items": "string",
+      "instances": {
+        "items": {
+          "app": "string",
+          "domain": "string",
+          "id": "string",
+          "status": "string",
+          "version": "string"
+        },
         "type": "array"
       }
     }
