@@ -1,6 +1,6 @@
 [
   {
-    "name": "apps/get",
+    "name": "app/get",
     "params": {
       "id": "string"
     },
@@ -46,7 +46,7 @@
     }
   },
   {
-    "name": "apps/list",
+    "name": "app/list",
     "params": null,
     "result": {
       "applications": {
