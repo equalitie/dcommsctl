@@ -7,17 +7,28 @@ sources:
       mountpoints:
         excludes: ["*/run/credentials/*"]
 
-  host_logs:
+  # Host logs from the systemd journal (structured: priority/severity, unit, identifier).
+  # NOTE: Vector's journald source shells out to `journalctl`, so the image must have it.
+  host_journal_logs:
+    type: journald
+    # The host stores journals persistently here (see compose.yml mounts). This must be a
+    # directory that actually contains journal files; `/run/log/journal` is empty on hosts
+    # using persistent storage, which makes journalctl find no boot entries.
+    journal_directory: /var/log/journal
+    # NOTE: we deliberately do NOT set `current_boot_only: false`. Reading all boots is
+    # unsupported on systemd 250-257 (Vector uses a `journalctl` invocation that isn't
+    # reliable there), so we keep the default (`true`) and read the current boot only.
+    data_dir: /var/lib/vector
+
+  # apt/dpkg don't log through the systemd journal on Debian, so these are tailed from files.
+  # `parse_package_logs` normalizes them into the same shape as the journald records.
+  host_package_logs:
     type: file
     include:
-      - /var/log/syslog
-      - /var/log/auth.log
-      - /var/log/kern.log
       - /var/log/dpkg.log
-    exclude:
-      - /var/log/*.gz
-      - /var/log/lastlog
-      - /var/log/wtmp
+      - /var/log/apt/history.log
+      - /var/log/apt/term.log
+    ignore_older_secs: 604800
 
   container_logs:
     type: docker_logs
@@ -27,30 +38,89 @@ sources:
       - logporter
       - vector
       - docker-proxy
-    include_labels:
-      - dc_app
-      - dc_version
-      - dc_inst
-      - dc_env
 
 transforms:
+  lift_container_labels:
+    type: remap
+    inputs:
+      - container_logs
+    source: |
+      # Vector namespaces docker labels under `label.<name>`; lift the Dawa ones to
+      # top-level so LogsQL can filter on them and the sink can use them as stream fields.
+      .dc_app     = .label.dc_app
+      .dc_inst    = .label.dc_inst
+      .dc_env     = .label.dc_env
+      .dc_version = .label.dc_version
+      # drop the now-redundant label map
+      del(.label)
+
   filter_container_logs:
     type: filter
     inputs:
-      - container_logs
+      - lift_container_labels
     condition: |
       !contains(to_string(.message) ?? "", "GET /healthcheck") &&
       !contains(to_string(.message) ?? "", "OPTIONS * HTTP/1.1") &&
       !contains(to_string(.message) ?? "", "HEAD /healthcheck")
 
+  # Normalize journald's record shape into the flat fields Dawa filters on:
+  # `programname` (the daemon), `severity` + `priority`, `unit` (systemd unit), `host`, and
+  # `message`.
+  #
+  # IMPORTANT: Vector's journald source already lowercases and normalizes its output. A raw
+  # record looks like:
+  #   { "PRIORITY": "6", "SYSLOG_IDENTIFIER": "kernel", "_SYSTEMD_UNIT": "...",
+  #     "host": "tern", "message": "...", "timestamp": "...", "source_type": "journald" }
+  # i.e. `message`, `timestamp` and `host` are ALREADY correct — do not reassign or delete
+  # them. (`MESSAGE`/`_HOSTNAME`/`_COMM` do not exist and would only yield nulls.)
+  parse_host_logs:
+    type: remap
+    inputs:
+      - host_journal_logs
+    source: |
+      # programname: prefer the syslog identifier, then the systemd unit.
+      .programname = .SYSLOG_IDENTIFIER
+      if .programname == null { .programname = ._SYSTEMD_UNIT }
+
+      # systemd unit (e.g. sysstat-collect.service), usable as a stream-filter dimension.
+      # Absent on kernel/early-boot records; fall back to the program name so those records
+      # still have a stable grouping dimension.
+      .unit = ._SYSTEMD_UNIT
+      if .unit == null { .unit = .programname }
+
+      # severity: map journald's numeric PRIORITY (0..7) to a readable name, keeping the
+      # numeric value too (LogsQL can filter on either).
+      # NOTE: journald delivers PRIORITY as a STRING ("6"), but `to_syslog_level` expects a
+      # number, so coerce with `to_int` first.
+      .priority = .PRIORITY
+      .severity = to_syslog_level(to_int(.PRIORITY) ?? 0) ?? null
+
+      # journald keys the sink no longer needs; keep the payload lean.
+      del(.PRIORITY)
+      del(.SYSLOG_IDENTIFIER)
+      del(._SYSTEMD_UNIT)
+
   filter_host_logs:
     type: filter
     inputs:
-      - host_logs
+      - parse_host_logs
     condition: |
       !includes(["dhclient", "cron"], to_string(.programname) ?? "") &&
-      !includes(["info", "debug"], to_string(.severity) ?? "") &&
       !contains(to_string(.message) ?? "", "GET /healthcheck")
+
+  # apt/dpkg file logs carry no `programname`/`host`/`unit`/`severity`, so normalize them into
+  # the same shape as the journald records — this lets one sink and one set of UI columns serve
+  # both sources. All of these files are package-manager output, hence the constant programname.
+  parse_package_logs:
+    type: remap
+    inputs:
+      - host_package_logs
+    source: |
+      .programname = "apt"
+      # The file source has no hostname; Dawa is single-host, so "localhost" is honest here.
+      .host = "localhost"
+      # Group these under a constant unit so the `unit` dimension is never blank.
+      .unit = "package-management"
 
 sinks:
   victorialogs_container:
@@ -69,7 +139,8 @@ sinks:
     type: http
     inputs:
       - filter_host_logs
-    uri: http://victorialogs:9428/insert/jsonline?_stream_fields=host,programname&_msg_field=message&_time_field=timestamp
+      - parse_package_logs
+    uri: http://victorialogs:9428/insert/jsonline?_stream_fields=host,programname,unit&_msg_field=message&_time_field=timestamp
     encoding:
       codec: json
     framing:
