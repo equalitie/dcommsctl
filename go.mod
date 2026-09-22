@@ -1,6 +1,6 @@
 module eq/dcommsctl
 
-go 1.26.4
+go 1.27.1
 
 require (
 	github.com/compose-spec/compose-go/v2 v2.13.0
@@ -8,10 +8,8 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/moby/moby/api v1.54.2
 	github.com/moby/moby/client v0.4.1
-	github.com/pkg/sftp v1.13.10
 	github.com/sourcegraph/jsonrpc2 v0.2.2
 	go.podman.io/podman/v6 v6.0.0
-	golang.org/x/crypto v0.53.0
 )
 
 require (
@@ -47,6 +45,7 @@ require (
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/opencontainers/runtime-spec v1.3.0 // indirect
 	github.com/opencontainers/selinux v1.15.1 // indirect
+	github.com/pkg/sftp v1.13.10 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/skeema/knownhosts v1.3.2 // indirect
@@ -59,6 +58,7 @@ require (
 	go.podman.io/common v0.68.0 // indirect
 	go.podman.io/storage v1.63.0 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.4 // indirect
+	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect

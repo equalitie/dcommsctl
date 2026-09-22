@@ -65,7 +65,47 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 		}
 	case "mastodon":
 		{
-			return InstallInstanceResult{}, fmt.Errorf("Application installation is not implemented")
+			config := MastodonConfig{
+				Domain:        args.DomainName,
+				PortWebUI:     3000,
+				PortStreaming: 4000,
+				Version:       "v4.5",
+			}
+
+			instanceDir, err := mastodonCreateInstance(ctx, app.systemCfg.InstancesDir, config)
+			if err != nil {
+				return InstallInstanceResult{}, err
+			}
+
+			instanceID := filepath.Base(instanceDir)
+			lockFilePath := path.Join(instanceDir, "."+jobType+".lock")
+
+			lockFile := jobLockFile(lockFilePath)
+
+			if lockFile == nil {
+				return InstallInstanceResult{}, fmt.Errorf("The job is in progress")
+			}
+			defer lockFile.Close()
+
+			pass := "test_pass"
+			cmd := exec.CommandContext(ctx, path.Join(app.systemCfg.AppsDir, "mastodon", "install.sh"))
+			cmd.Dir = instanceDir
+			cmd.Env = []string{
+				"VERSION=" + config.Version,
+			}
+
+			if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
+				return InstallInstanceResult{}, err
+			}
+
+			return InstallInstanceResult{
+				JobID:        jobID,
+				ID:           instanceID,
+				ClientID:     clientID,
+				ClientSecret: clientSecret,
+				AdminLogin:   "root",
+				AdminPass:    pass,
+			}, nil
 		}
 	case "peertube":
 		{

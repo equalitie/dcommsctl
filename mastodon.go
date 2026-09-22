@@ -9,14 +9,13 @@ import (
 )
 
 type MastodonConfig struct {
-	Domain   string
-	PortOut  int
-	PortOut2 int
-	Version  string
+	InstanceGenericConfig
+	PortStreaming int
+	PortWebUI     int
 }
 
 func mastodonCreateInstance(ctx context.Context, instancesDir string, config MastodonConfig) (string, error) {
-	pathToApp := path.Join("conf_tmpl", "peertube")
+	pathToApp := path.Join("conf_tmpl", "mastodon")
 
 	tmpl, err := template.ParseFiles(path.Join(pathToApp, "docker-compose.tmpl.yml"))
 	if err != nil {
@@ -36,7 +35,7 @@ func mastodonCreateInstance(ctx context.Context, instancesDir string, config Mas
 		return "", err
 	}
 
-	envTmpl, err := template.ParseFiles(path.Join(pathToApp, "env"))
+	envTmpl, err := template.ParseFiles(path.Join(pathToApp, "env.tmpl"))
 	if err != nil {
 		return "", err
 	}

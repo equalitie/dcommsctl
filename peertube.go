@@ -17,15 +17,15 @@ type DbConfig struct {
 }
 
 type PeertubeConfig struct {
-	Domain   string
+	InstanceGenericConfig
 	PortOut  int
 	PortOut2 int
 	Db       DbConfig
-	Version  string
 }
 
 func peertubeCreateInstance(ctx context.Context, instancesDir string, config PeertubeConfig) (string, error) {
-	tmpl, err := template.ParseFiles("./conf_tmpl/peertube/docker-compose.tmpl.yml")
+	pathToApp := path.Join("conf_tmpl", "peertube")
+	tmpl, err := template.ParseFiles(path.Join(pathToApp, "docker-compose.tmpl.yml"))
 	if err != nil {
 		return "", err
 	}
@@ -41,7 +41,7 @@ func peertubeCreateInstance(ctx context.Context, instancesDir string, config Pee
 		return "", err
 	}
 
-	envTmpl, err := template.ParseFiles("./conf_tmpl/peertube/env")
+	envTmpl, err := template.ParseFiles(path.Join(pathToApp, "env.tmpl"))
 	if err != nil {
 		return "", err
 	}

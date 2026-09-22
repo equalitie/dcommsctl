@@ -37,6 +37,14 @@ type BackupRestoreStep struct {
 	ScriptPath        string
 }
 
+type InstanceGenericConfig struct {
+	ClientID     string
+	ClientSecret string
+	Domain       string
+	OnionDomain  string
+	Version      string
+}
+
 type ContainerBackendType int
 
 const (
