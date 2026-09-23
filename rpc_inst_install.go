@@ -68,7 +68,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			config := MastodonConfig{
 				SSOIssuerURI:  app.systemCfg.SSODomain,
 				Domain:        args.DomainName,
-				PortWebUI:     3000,
+				PortWebUI:     3001,
 				PortStreaming: 4000,
 				Version:       "v4.5",
 			}
