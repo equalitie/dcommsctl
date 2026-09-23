@@ -18,17 +18,17 @@ type DbConfig struct {
 
 type PeertubeConfig struct {
 	InstanceGenericConfig
-	PortOut  int
-	PortOut2 int
-	Db       DbConfig
+	PortRTMP  int
+	PortWebUI int
+	Db        DbConfig
 }
 
 func peertubeCreateInstance(ctx context.Context, instancesDir string, config PeertubeConfig) (string, error) {
-	if !isPortBindable(config.PortOut) {
-		return "", fmt.Errorf("Peertube: port is already bound: %d", config.PortOut)
+	if !isPortBindable(config.PortRTMP) {
+		return "", fmt.Errorf("Peertube: port is already bound: %d", config.PortRTMP)
 	}
-	if !isPortBindable(config.PortOut2) {
-		return "", fmt.Errorf("Peertube: port is already bound: %d", config.PortOut2)
+	if !isPortBindable(config.PortWebUI) {
+		return "", fmt.Errorf("Peertube: port is already bound: %d", config.PortWebUI)
 	}
 
 	pathToApp := path.Join("conf_tmpl", "peertube")
@@ -66,10 +66,10 @@ func peertubeCreateInstance(ctx context.Context, instancesDir string, config Pee
 }
 
 func peertubeEnable(ctx context.Context, instanceName string, config PeertubeConfig) error {
-	if err := caddyAddRoute(ctx, instanceName, fmt.Sprintf("%s:%d", config.Domain, config.PortOut), fmt.Sprintf("http://%s-peertube-back:%d", instanceName, config.PortOut)); err != nil {
+	if err := caddyAddRoute(ctx, instanceName, fmt.Sprintf("%s:%d", config.Domain, config.PortRTMP), fmt.Sprintf("http://%s-peertube-back:%d", instanceName, config.PortRTMP)); err != nil {
 		return err
 	}
-	if err := caddyAddRoute(ctx, instanceName, config.Domain, fmt.Sprintf("http://%s-peertube-back:%d", instanceName, config.PortOut)); err != nil {
+	if err := caddyAddRoute(ctx, instanceName, config.Domain, fmt.Sprintf("http://%s-peertube-back:%d", instanceName, config.PortRTMP)); err != nil {
 		return err
 	}
 	return nil

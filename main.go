@@ -25,6 +25,7 @@ type NetworkRequest struct {
 }
 
 type SystemConfig struct {
+	SSODomain          string
 	DcommsConfFilesDir string
 	AppsDir            string
 	InstancesDir       string
@@ -38,6 +39,7 @@ type BackupRestoreStep struct {
 }
 
 type InstanceGenericConfig struct {
+	SSOIssuerURI string
 	ClientID     string
 	ClientSecret string
 	Domain       string

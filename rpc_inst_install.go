@@ -66,6 +66,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 	case "mastodon":
 		{
 			config := MastodonConfig{
+				SSOIssuerURI:  app.systemCfg.SSODomain,
 				Domain:        args.DomainName,
 				PortWebUI:     3000,
 				PortStreaming: 4000,
@@ -110,9 +111,10 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 	case "peertube":
 		{
 			config := PeertubeConfig{
-				Domain:   args.DomainName,
-				PortOut:  1935,
-				PortOut2: 9090,
+				SSOIssuerURI: app.systemCfg.SSODomain,
+				Domain:       args.DomainName,
+				PortRTMP:     1935,
+				PortWebUI:    9090,
 				Db: DbConfig{
 					Password: "",
 				},
@@ -188,6 +190,9 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
 				return InstallInstanceResult{}, err
 			}
+
+			// FIXME: update this in case of failure
+			app.systemCfg.SSODomain = args.DomainName
 
 			return InstallInstanceResult{
 				JobID:        jobID,
