@@ -37,7 +37,7 @@ func (app *GlobalState) rpcInstanceStart(ctx context.Context, args InstanceStart
 
 	cmdArgs := []string{"compose", "--project-name", instanceID, "up", "-d"}
 
-	cmd := exec.CommandContext(ctx, "docker", cmdArgs...)
+	cmd := exec.CommandContext(app.jobsManager.ctx, "docker", cmdArgs...)
 	cmd.Dir = instanceDir
 
 	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {

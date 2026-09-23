@@ -68,8 +68,8 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			config := MastodonConfig{
 				SSOIssuerURI:  app.systemCfg.SSODomain,
 				Domain:        args.DomainName,
-				PortWebUI:     3001,
-				PortStreaming: 4000,
+				PortWebUI:     randomPort(), // 3001,
+				PortStreaming: randomPort(), // 4000,
 				Version:       "v4.5",
 			}
 
@@ -89,7 +89,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			defer lockFile.Close()
 
 			pass := "test_pass"
-			cmd := exec.CommandContext(ctx, path.Join(app.systemCfg.AppsDir, "mastodon", "install.sh"))
+			cmd := exec.CommandContext(app.jobsManager.ctx, path.Join(app.systemCfg.AppsDir, "mastodon", "install.sh"))
 			cmd.Dir = instanceDir
 			cmd.Env = []string{
 				"VERSION=" + config.Version,
@@ -113,8 +113,8 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			config := PeertubeConfig{
 				SSOIssuerURI: app.systemCfg.SSODomain,
 				Domain:       args.DomainName,
-				PortRTMP:     1935,
-				PortWebUI:    9090,
+				PortRTMP:     randomPort(), // 1935,
+				PortWebUI:    randomPort(), // 9090,
 				Db: DbConfig{
 					Password: "",
 				},
@@ -136,7 +136,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			defer lockFile.Close()
 
 			pass := "test_pass"
-			cmd := exec.CommandContext(ctx, path.Join(app.systemCfg.AppsDir, "peertube", "install.sh"))
+			cmd := exec.CommandContext(app.jobsManager.ctx, path.Join(app.systemCfg.AppsDir, "peertube", "install.sh"))
 			cmd.Dir = instanceDir
 			cmd.Env = []string{
 				"APP_DIR=" + instanceDir,
@@ -180,7 +180,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 				return InstallInstanceResult{}, fmt.Errorf("The job is in progress")
 			}
 
-			cmd := exec.CommandContext(ctx, path.Join(app.systemCfg.AppsDir, "dawa", "install.sh"))
+			cmd := exec.CommandContext(app.jobsManager.ctx, path.Join(app.systemCfg.AppsDir, "dawa", "install.sh"))
 			cmd.Dir = instanceDir
 			cmd.Env = []string{
 				"LOCK_FILE=" + lockFilePath,

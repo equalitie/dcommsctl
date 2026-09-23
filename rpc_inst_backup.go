@@ -39,7 +39,7 @@ func (app *GlobalState) rpcInstanceBackup(ctx context.Context, args InstanceBack
 		return InstanceBackupResult{}, err
 	}
 
-	cmd := exec.CommandContext(ctx, path.Join("conf_tmpl", "peertube", "backup.sh"))
+	cmd := exec.CommandContext(app.jobsManager.ctx, path.Join("conf_tmpl", "peertube", "backup.sh"))
 	cmd.Dir = instanceDir
 	cmd.Env = []string{
 		"BACKUP_ROOT=" + backupRoot,

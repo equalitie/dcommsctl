@@ -49,8 +49,9 @@ type JobRecord struct {
 }
 
 type JobManager struct {
-	mu sync.RWMutex
+	ctx context.Context
 
+	mu   sync.RWMutex
 	jobs map[string]*JobRecord
 
 	jobsDBpath string
@@ -87,9 +88,10 @@ func jobLockFile(lockPath string) *os.File {
 	return f
 }
 
-func NewJobManager() *JobManager {
+func NewJobManager(ctx context.Context) *JobManager {
 	return &JobManager{
 		jobs: make(map[string]*JobRecord),
+		ctx:  ctx,
 	}
 }
 
@@ -287,7 +289,7 @@ func (m *JobManager) run(rec *JobRecord, cmd *exec.Cmd) error {
 func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jobType, jobID string, cmd *exec.Cmd) error {
 	logFilePath := filepath.Join(cmd.Dir, "jobs", jobID+".partial.log")
 
-	jobCtx, cancel := context.WithCancel(ctx)
+	jobCtx, cancel := context.WithCancel(context.TODO())
 	rec := &JobRecord{
 		Status: JobStatus{
 			ID:         jobID,

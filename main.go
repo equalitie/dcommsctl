@@ -60,9 +60,9 @@ type GlobalState struct {
 	jobsManager *JobManager
 }
 
-func NewGlobalState() *GlobalState {
+func NewGlobalState(ctx context.Context) *GlobalState {
 	return &GlobalState{
-		jobsManager: NewJobManager(),
+		jobsManager: NewJobManager(ctx),
 	}
 }
 
@@ -92,6 +92,17 @@ func instanceCreate(ctx context.Context, instancesDir string, instanceName strin
 	}
 
 	return pathToInst, nil
+}
+
+func randomPort() (port int) {
+	for {
+		port = rand.IntN(9999-1024) + 1024
+
+		if isPortBindable(port) {
+			break
+		}
+	}
+	return port
 }
 
 func isPortBindable(port int) bool {
@@ -133,7 +144,6 @@ func main() {
 	initLogging()
 
 	serverError := make(chan error, 1)
-	app := NewGlobalState()
 
 	rootContext, stop := signal.NotifyContext(
 		context.Background(),
@@ -141,6 +151,8 @@ func main() {
 		syscall.SIGTERM,
 	)
 	defer stop()
+
+	app := NewGlobalState(rootContext)
 
 	app.jobsManager.jobsDBpath, _ = filepath.Abs("./.jobs_db.json")
 

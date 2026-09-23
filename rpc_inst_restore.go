@@ -38,7 +38,7 @@ func (app *GlobalState) rpcInstanceRestore(ctx context.Context, args InstanceRes
 		return InstanceRestoreResult{}, fmt.Errorf("Failed to get access to backup dir: %s", err)
 	}
 
-	cmd := exec.CommandContext(ctx, path.Join("conf_tmpl", "peertube", "restore.sh"))
+	cmd := exec.CommandContext(app.jobsManager.ctx, path.Join("conf_tmpl", "peertube", "restore.sh"))
 	cmd.Dir = instanceDir
 	cmd.Env = []string{
 		"BACKUP_ROOT=" + backupRoot,
