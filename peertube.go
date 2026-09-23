@@ -24,6 +24,13 @@ type PeertubeConfig struct {
 }
 
 func peertubeCreateInstance(ctx context.Context, instancesDir string, config PeertubeConfig) (string, error) {
+	if !isPortBindable(config.PortOut) {
+		return "", fmt.Errorf("Peertube: port is already bound: %d", config.PortOut)
+	}
+	if !isPortBindable(config.PortOut2) {
+		return "", fmt.Errorf("Peertube: port is already bound: %d", config.PortOut2)
+	}
+
 	pathToApp := path.Join("conf_tmpl", "peertube")
 	tmpl, err := template.ParseFiles(path.Join(pathToApp, "docker-compose.tmpl.yml"))
 	if err != nil {

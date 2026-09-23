@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path"
 	"text/template"
@@ -15,6 +16,16 @@ type MastodonConfig struct {
 }
 
 func mastodonCreateInstance(ctx context.Context, instancesDir string, config MastodonConfig) (string, error) {
+	if config.Domain == "" {
+		return "", fmt.Errorf("Mastodon instance requires you to specify a domain")
+	}
+	// FIXME: we need to figure out the strategy for that. we should allow to bind the ports that are already bound if we want to swap instances but we also need a way to update those ports if we used wrong ones by mistake
+	if !isPortBindable(config.PortWebUI) {
+		return "", fmt.Errorf("Mastodon: port is already bound: %d", config.PortWebUI)
+	}
+	if !isPortBindable(config.PortStreaming) {
+		return "", fmt.Errorf("Mastodon: port is already bound: %d", config.PortStreaming)
+	}
 	pathToApp := path.Join("conf_tmpl", "mastodon")
 
 	tmpl, err := template.ParseFiles(path.Join(pathToApp, "docker-compose.tmpl.yml"))

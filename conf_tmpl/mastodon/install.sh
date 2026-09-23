@@ -41,7 +41,7 @@ sed -i 's/\r$//g' ./env
 
 printf "[DCOMMS State] Initializing mastodon database\n"
 
-docker compose run --entrypoint="bundle exec rails db:create" --rm mastodon-web
+docker compose run --entrypoint="bundle exec rails db:create --trace" --rm mastodon-web
 docker compose run --entrypoint="bundle exec rake db:prepare" --rm mastodon-web
 docker compose run --entrypoint="bundle exec rake db:migrate" --rm mastodon-web
 
