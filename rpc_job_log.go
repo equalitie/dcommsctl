@@ -11,7 +11,8 @@ type JobLogArgs struct {
 }
 
 type JobLogResult struct {
-	Log string `json:"log"`
+	Log  string `json:"log"`
+	Done bool   `json:"done"`
 }
 
 func (app *GlobalState) rpcJobLog(ctx context.Context, args JobLogArgs) (JobLogResult, error) {
@@ -22,12 +23,13 @@ func (app *GlobalState) rpcJobLog(ctx context.Context, args JobLogArgs) (JobLogR
 		return JobLogResult{}, fmt.Errorf("unknown job: %s", args.JobID)
 	}
 
-	d, err := app.jobsManager.fetchLog(instanceID, args.JobID, args.Offset)
+	l, err := app.jobsManager.fetchLog(instanceID, args.JobID, args.Offset)
 	if err != nil {
 		return JobLogResult{}, err
 	}
 
-	r.Log = string(d)
+	r.Log = string(l.LogChunk)
+	r.Done = l.LastChunk
 
 	return r, nil
 }

@@ -57,6 +57,11 @@ type JobManager struct {
 	jobsDBpath string
 }
 
+type JobLogChunk struct {
+	LogChunk  []byte
+	LastChunk bool
+}
+
 func isJobActive(s JobState) bool {
 	return s == JobPending || s == JobRunning
 }
@@ -164,26 +169,26 @@ func (m *JobManager) instanceIDForJob(id string) (string, bool) {
 	return "", false
 }
 
-func (m *JobManager) fetchLog(instanceID string, jobID string, offset int64) ([]byte, error) {
+func (m *JobManager) fetchLog(instanceID string, jobID string, offset int64) (JobLogChunk, error) {
 	rec, found := m.jobs[jobKey(instanceID, jobID)]
 
 	if !found {
-		return nil, fmt.Errorf("Job not found for instance '%s' and job id '%s'", instanceID, jobID)
+		return JobLogChunk{}, fmt.Errorf("Job not found for instance '%s' and job id '%s'", instanceID, jobID)
 	}
 
 	f, err := os.OpenFile(rec.LogFilePath, os.O_RDONLY, 0o644)
 	if err != nil {
-		return nil, err
+		return JobLogChunk{}, err
 	}
 	stat, err := f.Stat()
 	if err != nil {
-		return nil, err
+		return JobLogChunk{}, err
 	}
 
 	length := int64(64 * 1024)
 
 	if offset >= stat.Size() {
-		return nil, nil
+		return JobLogChunk{}, fmt.Errorf("Offset too far: offset %d, file size: %d", offset, stat.Size())
 	}
 
 	if offset+length > stat.Size() {
@@ -194,10 +199,15 @@ func (m *JobManager) fetchLog(instanceID string, jobID string, offset int64) ([]
 
 	n, err := f.ReadAt(buf, offset)
 	if err != nil && err != io.EOF {
-		return nil, err
+		return JobLogChunk{}, err
 	}
 
-	return buf[:n], nil
+	r := JobLogChunk{
+		LogChunk:  buf[:n],
+		LastChunk: offset+int64(n) >= stat.Size(),
+	}
+
+	return r, nil
 }
 
 func (m *JobManager) run(rec *JobRecord, cmd *exec.Cmd) error {
