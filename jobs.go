@@ -78,7 +78,9 @@ func jobKey(instanceID, jobID string) string {
 func jobLockFile(lockPath string) *os.File {
 	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
-		fmt.Println(err)
+		// Expected when another job of the same type is already running: the lock file
+		// exists, so O_EXCL fails. The caller treats a nil file as "already locked".
+		logError("cannot take job lock", "lock", lockPath, "err", err)
 		return nil
 	}
 
@@ -231,7 +233,8 @@ func (m *JobManager) run(rec *JobRecord, cmd *exec.Cmd) error {
 
 		if err := os.Rename(rec.LogFilePath, finalLogName); err != nil {
 			// FIXME: proper error handling
-			fmt.Println("moving job log file:", err)
+			logError("cannot move job log file",
+				"job", jobID, "from", rec.LogFilePath, "to", finalLogName, "err", err)
 		} else {
 			m.mu.Lock()
 			key := jobKey(rec.Status.InstanceID, jobID)
@@ -306,7 +309,7 @@ func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jo
 
 	go func() {
 		if err := m.run(rec, cmd); err != nil {
-			fmt.Println("job failed", err)
+			logError("job failed", "job", jobID, "instance", rec.Status.InstanceID, "err", err)
 		}
 	}()
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path"
 )
@@ -80,7 +79,7 @@ func rpcApplicationsList(ctx context.Context) (ApplicationListResult, error) {
 	for _, id := range appIDs {
 		app, err := loadAppConfig(id)
 		if err != nil {
-			log.Printf("apps/list: skipping %s: %s", id, err)
+			logInfo("app/list skipping", "app", id, "err", err)
 			continue
 		}
 

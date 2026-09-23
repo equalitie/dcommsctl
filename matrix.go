@@ -32,7 +32,7 @@ func matrixPostInstall(ctx context.Context, cli *dockerClient.Client) error {
 			}
 
 			if err := dockerRun(ctx, cli, ctr.ID, cmd); err != nil {
-				fmt.Println(err)
+				logError("matrix post-install command failed", "container", ctr.ID, "err", err)
 			}
 		}
 	}

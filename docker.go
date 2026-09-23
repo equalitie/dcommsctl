@@ -29,7 +29,7 @@ func dockerInspectContainers(ctx context.Context, cli *dockerClient.Client) erro
 	for _, ctr := range result.Items {
 		info, err := cli.ContainerInspect(ctx, ctr.ID, dockerClient.ContainerInspectOptions{})
 		if err != nil {
-			fmt.Println(err)
+			logError("cannot inspect container", "container", ctr.ID, "err", err)
 			continue
 		}
 
@@ -37,7 +37,7 @@ func dockerInspectContainers(ctx context.Context, cli *dockerClient.Client) erro
 		// NOTE: printing random stuff for now just to fiorgure out what we might need
 		resp, err := cli.ContainerStats(ctx, ctr.ID, dockerClient.ContainerStatsOptions{})
 		if err != nil {
-			fmt.Println(err)
+			logError("cannot get container stats", "container", ctr.ID, "err", err)
 			continue
 		}
 		defer resp.Body.Close()
@@ -49,13 +49,16 @@ func dockerInspectContainers(ctx context.Context, cli *dockerClient.Client) erro
 
 		var stats dockerContainer.StatsResponse
 		if err := json.Unmarshal(data, &stats); err != nil {
-			fmt.Println(err)
+			logError("cannot parse container stats", "container", ctr.ID, "err", err)
 			continue
 		}
 
 		ramUsed := float32(stats.MemoryStats.Usage) / float32(stats.MemoryStats.Limit)
 
-		fmt.Printf("%-22s %d %d %d %d %d %f\n", ctr.Image, info.Container.SizeRw, r.Memory, r.NanoCPUs, r.CPUQuota, r.CPUShares, ramUsed)
+		logDebug("container",
+			"image", ctr.Image, "size_rw", info.Container.SizeRw,
+			"memory", r.Memory, "nano_cpus", r.NanoCPUs,
+			"cpu_quota", r.CPUQuota, "cpu_shares", r.CPUShares, "ram_used", ramUsed)
 	}
 
 	return nil
@@ -69,26 +72,28 @@ func dockerRun(ctx context.Context, cli *dockerClient.Client, ctrID string, cmd 
 		TTY:          false,
 	})
 	if err != nil {
-		fmt.Println("Failed to create exec command on container:", err)
+		logError("cannot create exec command on container", "container", ctrID, "err", err)
 		return err
 	}
 
 	attachResp, err := cli.ExecAttach(ctx, createResp.ID, dockerClient.ExecAttachOptions{TTY: false})
 	if err != nil {
-		fmt.Println("Failed to attach to exec:", err)
+		logError("cannot attach to exec", "container", ctrID, "err", err)
 		return err
 	}
 	defer attachResp.Close()
-	fmt.Println("--- Running command on container ---")
-	// inspect, err := cli.ExecInspect(ctx, createResp.ID, dockerClient.ExecInspectOptions{})
-	// fmt.Printf("Running: %v, ExitCode: %d\n", inspect.Running, inspect.ExitCode)
-	// FIXME: this one hangs
+
+	logDebug("running command on container", "container", ctrID, "cmd", cmd)
+
+	// Output goes to stdout/stderr unchanged: it is the command's own output, streamed
+	// to the operator, not a log line of ours to restructure.
 	_, err = stdcopy.StdCopy(os.Stdout, os.Stderr, attachResp.Reader)
 	if err != nil {
-		fmt.Println("Failed to read output:", err)
+		logError("cannot read exec output", "container", ctrID, "err", err)
 		return err
 	}
-	fmt.Println("---     End of command output    ---")
+
+	logDebug("finished command on container", "container", ctrID)
 
 	return nil
 }
@@ -116,7 +121,7 @@ func dockerCreateUpdateCompose(ctx context.Context, composeFilePath string) erro
 		return err
 	}
 
-	fmt.Println(projectYAML)
+	logJSON("compose project marshalled", projectYAML)
 
 	return nil
 }

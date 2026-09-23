@@ -6,7 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"reflect"
@@ -297,7 +298,7 @@ func newID() string {
 
 type Server struct {
 	// Logger, if non-nil, receives connect/disconnect and cleanup messages.
-	Logger *log.Logger
+	Logger *slog.Logger
 
 	reg      *registry
 	upgrader websocket.Upgrader
@@ -344,7 +345,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) logf(format string, args ...any) {
 	if s.Logger != nil {
-		s.Logger.Printf(format, args...)
+		s.Logger.Info(fmt.Sprintf(format, args...))
 	}
 }
 
@@ -357,6 +358,11 @@ func (h *connHandler) Handle(ctx context.Context, c *jsonrpc2.Conn, req *jsonrpc
 	ctx = context.WithValue(ctx, connKey, c)
 	ctx = context.WithValue(ctx, sessKey, h.sess)
 
+	// Params are logged raw rather than re-encoded: they arrive as *json.RawMessage and
+	// jsonValue passes that through, preserving the exact wire form (including key
+	// order) that a client and server disagreeing about is worth seeing.
+	logJSON("--> request", req.Params, "method", req.Method, "id", req.ID)
+
 	result, err := h.srv.reg.call(ctx, req.Method, req.Params)
 	if req.Notif {
 		return
@@ -366,9 +372,14 @@ func (h *connHandler) Handle(ctx context.Context, c *jsonrpc2.Conn, req *jsonrpc
 		if !errors.As(err, &rpcErr) {
 			rpcErr = &jsonrpc2.Error{Code: jsonrpc2.CodeInternalError, Message: err.Error()}
 		}
+		logJSON("<-- error", nil,
+			"method", req.Method, "id", req.ID, "code", rpcErr.Code, "message", rpcErr.Message)
 		c.ReplyWithError(ctx, req.ID, rpcErr)
 		return
 	}
+
+	logJSON("<-- result", result, "method", req.Method, "id", req.ID)
+
 	c.Reply(ctx, req.ID, result)
 }
 
