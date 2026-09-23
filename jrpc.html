@@ -40,7 +40,7 @@
               ws.send(JSON.stringify({
                 jsonrpc: '2.0',
                 method: 'inst/install',
-                params: { name: "peertube" },
+                params: { name: "peertube", domain: "localhost" },
                 id: 1
               }));
             }
