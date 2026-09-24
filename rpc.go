@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
 	"os"
 	"reflect"
@@ -22,8 +23,8 @@ import (
 )
 
 var (
-	ctxType = reflect.TypeOf((*context.Context)(nil)).Elem()
-	errType = reflect.TypeOf((*error)(nil)).Elem()
+	ctxType = reflect.TypeFor[context.Context]()
+	errType = reflect.TypeFor[error]()
 )
 
 type rpcFunc struct {
@@ -94,8 +95,7 @@ func schemaFor(t reflect.Type) any {
 	case reflect.Struct:
 		fields := make(map[string]any)
 
-		for i := 0; i < t.NumField(); i++ {
-			field := t.Field(i)
+		for field := range t.Fields() {
 
 			if !field.IsExported() {
 				continue
@@ -115,9 +115,7 @@ func schemaFor(t reflect.Type) any {
 
 			if field.Anonymous && tag == "" {
 				if embedded, ok := fieldSchema.(map[string]any); ok {
-					for k, v := range embedded {
-						fields[k] = v
-					}
+					maps.Copy(fields, embedded)
 					continue
 				}
 			}
@@ -354,6 +352,13 @@ type connHandler struct {
 	sess *session
 }
 
+type ctxKey int
+
+const (
+	connKey ctxKey = iota
+	sessKey
+)
+
 func (h *connHandler) Handle(ctx context.Context, c *jsonrpc2.Conn, req *jsonrpc2.Request) {
 	ctx = context.WithValue(ctx, connKey, c)
 	ctx = context.WithValue(ctx, sessKey, h.sess)
@@ -381,85 +386,4 @@ func (h *connHandler) Handle(ctx context.Context, c *jsonrpc2.Conn, req *jsonrpc
 	logJSON("<-- result", result, "method", req.Method, "id", req.ID)
 
 	c.Reply(ctx, req.ID, result)
-}
-
-type ctxKey int
-
-const (
-	connKey ctxKey = iota
-	sessKey
-)
-
-func connFromContext(ctx context.Context) *jsonrpc2.Conn {
-	c, _ := ctx.Value(connKey).(*jsonrpc2.Conn)
-	return c
-}
-
-func sessionFromContext(ctx context.Context) *session {
-	s, _ := ctx.Value(sessKey).(*session)
-	return s
-}
-
-// ---- helpers for use inside RPC functions ----
-
-// Notify pushes a server-initiated JSON-RPC notification to the current client.
-// It is safe to call from a goroutine that captured a context carrying the
-// connection (the handler's ctx, or one returned by StreamContext).
-func Notify(ctx context.Context, method string, params any) error {
-	conn := connFromContext(ctx)
-	if conn == nil {
-		return errors.New("rpcws: no connection in context")
-	}
-	return conn.Notify(context.Background(), method, params)
-}
-
-// AddCleanup registers cleanup for the current connection and returns a unique
-// subscription id. cleanup runs on Unsubscribe(id) or client disconnect,
-// exactly once, and is removed the moment it is taken to run.
-func AddCleanup(ctx context.Context, cleanup func()) string {
-	s := sessionFromContext(ctx)
-	if s == nil {
-		return ""
-	}
-	return s.add(cleanup)
-}
-
-// StreamContext returns a cancelable context rooted independently of the request
-// (so it outlives the call) that still carries the connection for Notify.
-// Register its CancelFunc with AddCleanup so the stream stops on unsubscribe or
-// disconnect.
-func StreamContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	base := context.WithValue(context.Background(), connKey, connFromContext(ctx))
-	return context.WithCancel(base)
-}
-
-// ---- built-in unsubscribe method ----
-
-// UnsubscribeArgs is the parameter shape for the built-in Unsubscribe method.
-type UnsubscribeArgs struct {
-	SubscriptionID string `json:"subscription_id"`
-}
-
-// UnsubscribeResult is what Unsubscribe returns.
-type UnsubscribeResult struct {
-	Stopped bool `json:"stopped"`
-}
-
-// Unsubscribe is a ready-to-register method that runs and removes the cleanup
-// for the given subscription id. Register it with:
-//
-//	s.Register("unsubscribe", rpcws.Unsubscribe)
-//
-// An unknown or already-stopped id returns Stopped=false rather than an error.
-func Unsubscribe(ctx context.Context, a UnsubscribeArgs) (UnsubscribeResult, error) {
-	s := sessionFromContext(ctx)
-	if s == nil {
-		return UnsubscribeResult{}, errors.New("no session available")
-	}
-	cleanup, ok := s.take(a.SubscriptionID)
-	if !ok {
-		return UnsubscribeResult{Stopped: false}, nil
-	}
-	cleanup()
-	return UnsubscribeResult{Stopped: true}, nil
 }
