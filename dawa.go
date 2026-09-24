@@ -19,7 +19,7 @@ func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaCon
 		return "", err
 	}
 
-	pathToInst, err := instanceCreate(ctx, instancesDir, "dawa")
+	pathToInst, err := instanceCreate(instancesDir, "dawa")
 	if err != nil {
 		return "", err
 	}

@@ -68,8 +68,8 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			config := MastodonConfig{
 				SSOIssuerURI:  app.systemCfg.SSODomain,
 				Domain:        args.DomainName,
-				PortWebUI:     randomPort(), // 3001,
-				PortStreaming: randomPort(), // 4000,
+				PortWebUI:     portRandom(), // 3001,
+				PortStreaming: portRandom(), // 4000,
 				Version:       "v4.5",
 			}
 
@@ -113,8 +113,8 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			config := PeertubeConfig{
 				SSOIssuerURI: app.systemCfg.SSODomain,
 				Domain:       args.DomainName,
-				PortRTMP:     randomPort(), // 1935,
-				PortWebUI:    randomPort(), // 9090,
+				PortRTMP:     portRandom(), // 1935,
+				PortWebUI:    portRandom(), // 9090,
 				Db: DbConfig{
 					Password: "",
 				},

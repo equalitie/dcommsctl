@@ -19,23 +19,12 @@ import (
 
 const scriptGracePeriod = 20 * time.Second
 
-type NetworkRequest struct {
-	Name     string
-	Internal bool
-}
-
 type SystemConfig struct {
 	SSODomain          string
 	DcommsConfFilesDir string
 	AppsDir            string
 	InstancesDir       string
 	BackupsDir         string
-}
-
-type BackupRestoreStep struct {
-	TmpContainerImage string
-	ServiceName       string
-	ScriptPath        string
 }
 
 type InstanceGenericConfig struct {
@@ -70,7 +59,7 @@ func instanceGenID() string {
 	return instanceNames[rand.IntN(len(instanceNames))]
 }
 
-func instanceCreate(ctx context.Context, instancesDir string, instanceName string) (string, error) {
+func instanceCreate(instancesDir string, instanceName string) (string, error) {
 	instanceID := instanceName + "-" + instanceGenID()
 
 	pathToInst := path.Join(instancesDir, instanceID)
@@ -94,18 +83,18 @@ func instanceCreate(ctx context.Context, instancesDir string, instanceName strin
 	return pathToInst, nil
 }
 
-func randomPort() (port int) {
+func portRandom() (port int) {
 	for {
 		port = rand.IntN(9999-1024) + 1024
 
-		if isPortBindable(port) {
+		if portIsBindable(port) {
 			break
 		}
 	}
 	return port
 }
 
-func isPortBindable(port int) bool {
+func portIsBindable(port int) bool {
 	addr := fmt.Sprintf(":%d", port)
 
 	c, err := net.Listen("tcp", addr)

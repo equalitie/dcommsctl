@@ -24,10 +24,10 @@ type PeertubeConfig struct {
 }
 
 func peertubeCreateInstance(ctx context.Context, instancesDir string, config PeertubeConfig) (string, error) {
-	if !isPortBindable(config.PortRTMP) {
+	if !portIsBindable(config.PortRTMP) {
 		return "", fmt.Errorf("Peertube: port is already bound: %d", config.PortRTMP)
 	}
-	if !isPortBindable(config.PortWebUI) {
+	if !portIsBindable(config.PortWebUI) {
 		return "", fmt.Errorf("Peertube: port is already bound: %d", config.PortWebUI)
 	}
 
@@ -37,7 +37,10 @@ func peertubeCreateInstance(ctx context.Context, instancesDir string, config Pee
 		return "", err
 	}
 
-	pathToInst, err := instanceCreate(ctx, instancesDir, "peertube")
+	pathToInst, err := instanceCreate(instancesDir, "peertube")
+	if err != nil {
+		return "", err
+	}
 
 	composeFile, err := os.OpenFile(path.Join(pathToInst, "docker-compose.yml"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
