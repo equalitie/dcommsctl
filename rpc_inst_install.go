@@ -56,7 +56,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 
 			instanceID := filepath.Base(instanceDir)
 			return InstallInstanceResult{
-				JobID:        jobID,
+				JobID:        "",
 				ID:           instanceID,
 				ClientID:     clientID,
 				ClientSecret: clientSecret,
