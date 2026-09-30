@@ -86,7 +86,8 @@ func caddySendRequest(ctx context.Context, endpoint string, method string, paylo
 }
 
 func caddyAddRoute(ctx context.Context, instanceName, hostname, upstreamAddress string) error {
-	endpoint := "localhost:2019/config/apps/http/servers/dcomms/routes"
+	// FIXME: change server name
+	endpoint := "localhost:2019/config/apps/http/servers/srv0/routes"
 
 	payload := CaddyRoute{
 		ID: instanceName,
