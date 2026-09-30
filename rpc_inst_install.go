@@ -10,12 +10,12 @@ import (
 	"path/filepath"
 )
 
-type InstallInstanceArgs struct {
+type InstanceInstallArgs struct {
 	AppName    string `json:"name"`
 	DomainName string `json:"domain"`
 }
 
-type InstallInstanceResult struct {
+type InstanceInstallResult struct {
 	JobID        string `json:"job_id"`
 	ID           string `json:"id"`
 	AdminLogin   string `json:"admin_login"`
@@ -33,7 +33,7 @@ func randomID() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInstanceArgs) (InstallInstanceResult, error) {
+func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstanceInstallArgs) (InstanceInstallResult, error) {
 	applicationID := args.AppName
 	jobType := "install"
 	jobID := jobID(jobType)
@@ -51,11 +51,11 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			}
 			instanceDir, err := caddyCreateInstance(app.systemCfg.InstancesDir, config)
 			if err != nil {
-				return InstallInstanceResult{}, err
+				return InstanceInstallResult{}, err
 			}
 
 			instanceID := filepath.Base(instanceDir)
-			return InstallInstanceResult{
+			return InstanceInstallResult{
 				JobID:        "",
 				ID:           instanceID,
 				ClientID:     clientID,
@@ -75,7 +75,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 
 			instanceDir, err := mastodonCreateInstance(ctx, app.systemCfg.InstancesDir, config)
 			if err != nil {
-				return InstallInstanceResult{}, err
+				return InstanceInstallResult{}, err
 			}
 
 			instanceID := filepath.Base(instanceDir)
@@ -84,7 +84,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			lockFile := jobLockFile(lockFilePath)
 
 			if lockFile == nil {
-				return InstallInstanceResult{}, fmt.Errorf("The job is in progress")
+				return InstanceInstallResult{}, fmt.Errorf("The job is in progress")
 			}
 			defer lockFile.Close()
 
@@ -96,10 +96,10 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			}
 
 			if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
-				return InstallInstanceResult{}, err
+				return InstanceInstallResult{}, err
 			}
 
-			return InstallInstanceResult{
+			return InstanceInstallResult{
 				JobID:        jobID,
 				ID:           instanceID,
 				ClientID:     clientID,
@@ -126,16 +126,16 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 
 			instanceDir, err := peertubeCreateInstance(ctx, app.systemCfg.InstancesDir, config)
 			if err != nil {
-				return InstallInstanceResult{}, err
+				return InstanceInstallResult{}, err
 			}
 
 			instanceID := filepath.Base(instanceDir)
-			lockFilePath := path.Join(instanceDir, "."+jobType+".lock")
+			lockFilePath := path.Join(instanceDir, ".job.lock")
 
 			lockFile := jobLockFile(lockFilePath)
 
 			if lockFile == nil {
-				return InstallInstanceResult{}, fmt.Errorf("The job is in progress")
+				return InstanceInstallResult{}, fmt.Errorf("The job is in progress")
 			}
 			defer lockFile.Close()
 
@@ -143,16 +143,15 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			cmd.Dir = instanceDir
 			cmd.Env = []string{
 				"APP_DIR=" + instanceDir,
-				"DWEB_DOMAIN=" + args.DomainName,
 				"OAUTH_CLIENT_ID=" + clientID,
 				"OAUTH_CLIENT_SECRET=" + clientSecret,
 			}
 
 			if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
-				return InstallInstanceResult{}, err
+				return InstanceInstallResult{}, err
 			}
 
-			return InstallInstanceResult{
+			return InstanceInstallResult{
 				JobID:        jobID,
 				ID:           instanceID,
 				ClientID:     clientID,
@@ -170,7 +169,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 
 			instanceDir, err := dawaCreateInstance(ctx, app.systemCfg.InstancesDir, config)
 			if err != nil {
-				return InstallInstanceResult{}, err
+				return InstanceInstallResult{}, err
 			}
 
 			instanceID := filepath.Base(instanceDir)
@@ -179,7 +178,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			lockFile := jobLockFile(path.Join(instanceDir, lockFilePath))
 
 			if lockFile == nil {
-				return InstallInstanceResult{}, fmt.Errorf("The job is in progress")
+				return InstanceInstallResult{}, fmt.Errorf("The job is in progress")
 			}
 
 			cmd := exec.CommandContext(app.jobsManager.ctx, path.Join(app.systemCfg.AppsDir, "dawa", "install.sh"))
@@ -190,13 +189,13 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			}
 
 			if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
-				return InstallInstanceResult{}, err
+				return InstanceInstallResult{}, err
 			}
 
 			// FIXME: update this in case of failure
 			app.systemCfg.SSODomain = args.DomainName
 
-			return InstallInstanceResult{
+			return InstanceInstallResult{
 				JobID:        jobID,
 				ID:           instanceID,
 				ClientID:     clientID,
@@ -204,5 +203,5 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			}, nil
 		}
 	}
-	return InstallInstanceResult{}, fmt.Errorf("This application is not supported")
+	return InstanceInstallResult{}, fmt.Errorf("This application is not supported")
 }

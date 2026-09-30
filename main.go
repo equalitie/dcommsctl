@@ -20,11 +20,10 @@ import (
 const scriptGracePeriod = 20 * time.Second
 
 type SystemConfig struct {
-	SSODomain          string
-	DcommsConfFilesDir string
-	AppsDir            string
-	InstancesDir       string
-	BackupsDir         string
+	SSODomain    string
+	AppsDir      string
+	InstancesDir string
+	BackupsDir   string
 }
 
 type InstanceGenericConfig struct {
@@ -129,6 +128,67 @@ func crashLogInit() {
 	}
 }
 
+func (app *GlobalState) pollJobStatus(ctx context.Context, jobID string) error {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("cancelled")
+		case <-ticker.C:
+			jobStatusRes, err := app.rpcJobStatus(ctx, JobStatusArgs{JobID: JobID(jobID)})
+			if err != nil {
+				return err
+			}
+
+			if jobStatusRes.State == JobDone {
+				return nil
+			}
+
+			if jobStatusRes.State == JobFailed {
+				return fmt.Errorf("job failed: %s", jobStatusRes.Error)
+			}
+		}
+	}
+}
+
+func (app *GlobalState) initApps(ctx context.Context) error {
+	_, err := app.rpcInstanceInstall(ctx, InstanceInstallArgs{
+		AppName:    "caddy",
+		DomainName: "localhost",
+	})
+	if err != nil {
+		return err
+	}
+
+	caddyStartResult, err := app.rpcInstanceStart(ctx, InstanceStartArgs{
+		InstanceName: "caddy",
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := app.pollJobStatus(ctx, caddyStartResult.JobID); err != nil {
+		return err
+	}
+
+	// FIXME: get the actual port
+	logInfo("Caddy should be running on port :8000")
+
+	dawaResult, err := app.rpcInstanceInstall(ctx, InstanceInstallArgs{
+		AppName:    "dawa",
+		DomainName: "dawa.localhost",
+	})
+	if err != nil {
+		return err
+	}
+	if err := app.pollJobStatus(ctx, dawaResult.JobID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func main() {
 	initLogging()
 
@@ -144,15 +204,20 @@ func main() {
 	app := NewGlobalState(rootContext)
 
 	app.jobsManager.jobsDBpath, _ = filepath.Abs("./.jobs_db.json")
+	app.jobsManager.jobsPath, _ = filepath.Abs("./.jobs")
+
+	app.systemCfg.InstancesDir, _ = filepath.Abs("./.instances")
+	app.systemCfg.AppsDir, _ = filepath.Abs("./conf_tmpl")
+	app.systemCfg.BackupsDir, _ = filepath.Abs("./.backups")
+
+	// TODO: debug this
+	// if err := app.initApps(rootContext); err != nil {
+	// 	panic(err)
+	// }
 
 	if err := app.jobsManager.loadJobs(); err != nil {
 		panic(err)
 	}
-
-	app.systemCfg.DcommsConfFilesDir, _ = filepath.Abs("./dcomms-docker-compose")
-	app.systemCfg.InstancesDir, _ = filepath.Abs("./.instances")
-	app.systemCfg.AppsDir, _ = filepath.Abs("./conf_tmpl")
-	app.systemCfg.BackupsDir, _ = filepath.Abs("./.backups")
 
 	jRPCServer := NewJRPCServer()
 	jRPCServer.Logger = slog.Default()

@@ -198,7 +198,8 @@
     },
     "result": {
       "done": "boolean",
-      "log": "string"
+      "log": "string",
+      "next_offset": "integer"
     }
   },
   {

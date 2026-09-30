@@ -29,11 +29,10 @@ func (app *GlobalState) rpcInstanceStart(ctx context.Context, args InstanceStart
 	lockFilePath := path.Join(instanceDir, "."+jobType+".lock")
 
 	lockFile := jobLockFile(lockFilePath)
-
 	if lockFile == nil {
 		return InstanceStartResult{}, fmt.Errorf("The job is in progress")
 	}
-	defer lockFile.Close()
+	lockFile.Close()
 
 	cmdArgs := []string{"compose", "--project-name", instanceID, "up", "-d"}
 
