@@ -9,7 +9,7 @@ service_stopped=0
 cleanup() {
   status=$?
 
-  if [ "$service_stopped" -ne 0]
+  if [ "$service_stopped" -ne 0]; then
       docker compose start mastodon-sidekiq 2>/dev/null
   fi
 
