@@ -135,7 +135,7 @@ func caddyDropRoute(ctx context.Context, instanceName string) error {
 	return nil
 }
 
-func caddyCreateInstance(ctx context.Context, instancesDir string, config CaddyConfig) (string, error) {
+func caddyCreateInstance(instancesDir string, config CaddyConfig) (string, error) {
 	if config.Domain == "" {
 		config.Domain = "localhost"
 	}

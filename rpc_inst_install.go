@@ -49,7 +49,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 				Domain: args.DomainName,
 				Port:   8000,
 			}
-			instanceDir, err := caddyCreateInstance(ctx, app.systemCfg.InstancesDir, config)
+			instanceDir, err := caddyCreateInstance(app.systemCfg.InstancesDir, config)
 			if err != nil {
 				return InstallInstanceResult{}, err
 			}
