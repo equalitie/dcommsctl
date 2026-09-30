@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -oeu pipefail
+umask 077
 
 # FIXME: pass instance name
 final_dir="$BACKUP_ROOT/peertube/$BACKUP_ID"

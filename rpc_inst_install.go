@@ -110,6 +110,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 		}
 	case "peertube":
 		{
+			adminPass := "test_pass"
 			config := PeertubeConfig{
 				SSOIssuerURI: app.systemCfg.SSODomain,
 				Domain:       args.DomainName,
@@ -117,6 +118,9 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 				PortWebUI:    portRandom(), // 9090,
 				Db: DbConfig{
 					Password: "",
+				},
+				Admin: AdminConfig{
+					Password: adminPass,
 				},
 			}
 
@@ -135,12 +139,10 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 			}
 			defer lockFile.Close()
 
-			pass := "test_pass"
 			cmd := exec.CommandContext(app.jobsManager.ctx, path.Join(app.systemCfg.AppsDir, "peertube", "install.sh"))
 			cmd.Dir = instanceDir
 			cmd.Env = []string{
 				"APP_DIR=" + instanceDir,
-				"PEERTUBE_ADMIN_PASS=" + pass,
 				"DWEB_DOMAIN=" + args.DomainName,
 				"OAUTH_CLIENT_ID=" + clientID,
 				"OAUTH_CLIENT_SECRET=" + clientSecret,
@@ -156,7 +158,7 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstallInst
 				ClientID:     clientID,
 				ClientSecret: clientSecret,
 				AdminLogin:   "root",
-				AdminPass:    pass,
+				AdminPass:    adminPass,
 			}, nil
 		}
 	case "dawa":

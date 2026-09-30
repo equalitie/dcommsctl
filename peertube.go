@@ -9,7 +9,8 @@ import (
 )
 
 type AdminConfig struct {
-	Email string
+	Email    string
+	Password string
 }
 
 type DbConfig struct {
@@ -21,6 +22,7 @@ type PeertubeConfig struct {
 	PortRTMP  int
 	PortWebUI int
 	Db        DbConfig
+	Admin     AdminConfig
 }
 
 func peertubeCreateInstance(ctx context.Context, instancesDir string, config PeertubeConfig) (string, error) {
