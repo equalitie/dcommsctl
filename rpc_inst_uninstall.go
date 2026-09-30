@@ -22,14 +22,11 @@ func (app *GlobalState) rpcInstanceUninstall(ctx context.Context, args InstanceU
 	instanceID := args.ID
 
 	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
-	lockFilePath := path.Join(instanceDir, "."+jobType+".lock")
+	lockFilePath := path.Join(instanceDir, ".job.lock")
 
-	lockFile := jobLockFile(lockFilePath)
-
-	if lockFile == nil {
+	if err := jobTryToLockFile(lockFilePath); err != nil {
 		return InstanceUninstallResult{}, fmt.Errorf("The job is in progress")
 	}
-	defer lockFile.Close()
 
 	cmdArgs := []string{"compose", "down"}
 

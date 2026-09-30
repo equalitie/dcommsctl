@@ -23,14 +23,12 @@ func (app *GlobalState) rpcInstanceRestore(ctx context.Context, args InstanceRes
 	instanceID := args.InstanceName
 
 	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
-	lockFilePath := "." + jobType + ".lock"
+	lockFilePath := path.Join(instanceDir, ".job.lock")
 
-	lockFile := jobLockFile(path.Join(instanceDir, lockFilePath))
-
-	if lockFile == nil {
+	if err := jobTryToLockFile(path.Join(instanceDir, lockFilePath)); err != nil {
 		return InstanceRestoreResult{}, fmt.Errorf("The job is in progress")
 	}
-	defer lockFile.Close()
+
 	backupID := instanceID
 	backupRoot := path.Join(app.systemCfg.BackupsDir, backupID)
 

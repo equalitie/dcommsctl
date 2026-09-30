@@ -119,7 +119,7 @@ func caddyAddRoute(ctx context.Context, instanceName, hostname, upstreamAddress 
 
 func caddyDropRoute(ctx context.Context, instanceName string) error {
 	// FIXME: untested, change payload type
-	endpoint := "localhost:2019/config/apps/http/servers/dcomms/routes"
+	endpoint := "localhost:2019/config/apps/http/servers/srv0/routes"
 
 	payload := CaddyRoute{
 		ID: instanceName,

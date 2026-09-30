@@ -65,7 +65,7 @@ docker compose exec -T peertube-redis sh -c \
 
 docker run --rm \
   --user "$(id -u):$(id -g)" \
-  --volumes-from $(./dcomms_compose.sh ps -aq peertube-back) \
+  --volumes-from $(docker compose ps -aq peertube-back) \
   -v "$work_dir:/backup" \
   alpine:latest \
   tar czf /backup/content.tar.gz /data

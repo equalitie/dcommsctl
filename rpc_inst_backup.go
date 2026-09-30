@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 )
 
 type InstanceBackupArgs struct {
@@ -23,14 +24,21 @@ func (app *GlobalState) rpcInstanceBackup(ctx context.Context, args InstanceBack
 	instanceID := args.InstanceName
 
 	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
-	lockFilePath := "." + jobType + ".lock"
+	lockFilePath := path.Join(instanceDir, ".job.lock")
 
-	lockFile := jobLockFile(path.Join(instanceDir, lockFilePath))
+	instanceDirParts := strings.Split(path.Base(instanceDir), "-")
 
-	if lockFile == nil {
+	appName := instanceDirParts[0]
+	pathToAppConfig := path.Join(app.systemCfg.AppsDir, appName, "config.json")
+
+	// FIXME: improve the check
+	if _, err := os.Stat(pathToAppConfig); err != nil {
+		return InstanceBackupResult{}, fmt.Errorf("Application %s is not supported", appName)
+	}
+
+	if err := jobTryToLockFile(path.Join(instanceDir, lockFilePath)); err != nil {
 		return InstanceBackupResult{}, fmt.Errorf("The job is in progress")
 	}
-	defer lockFile.Close()
 
 	backupID := instanceID
 	backupRoot := path.Join(app.systemCfg.BackupsDir, backupID)
@@ -39,7 +47,7 @@ func (app *GlobalState) rpcInstanceBackup(ctx context.Context, args InstanceBack
 		return InstanceBackupResult{}, err
 	}
 
-	cmd := exec.CommandContext(app.jobsManager.ctx, path.Join("conf_tmpl", "peertube", "backup.sh"))
+	cmd := exec.CommandContext(app.jobsManager.ctx, path.Join(app.systemCfg.AppsDir, appName, "backup.sh"))
 	cmd.Dir = instanceDir
 	cmd.Env = []string{
 		"BACKUP_ROOT=" + backupRoot,

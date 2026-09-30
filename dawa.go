@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"path"
@@ -13,13 +14,28 @@ type DawaConfig struct {
 	PortOut int
 }
 
-func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaConfig) (string, error) {
-	tmpl, err := template.ParseFiles("./conf_tmpl/dawa/docker-compose.tmpl.yml")
-	if err != nil {
-		return "", err
+func dawaIsInstalled(instancesDir string) (bool, error) {
+	pathToInst := path.Join(instancesDir, "dawa")
+	if _, err := os.Stat(pathToInst); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+
+		return false, err
 	}
 
-	pathToInst, err := instanceCreate(instancesDir, "dawa")
+	return true, nil
+}
+
+func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaConfig) (string, error) {
+	// FIXME: this is a temporary measure, cause we ideally want to have multiple instances of dawa
+	// or maybe we need another mechanism to upgrade dawa
+	pathToInst := path.Join(instancesDir, "dawa")
+	if installed, _ := dawaIsInstalled(instancesDir); installed {
+		return pathToInst, nil
+	}
+
+	tmpl, err := template.ParseFiles("./conf_tmpl/dawa/docker-compose.tmpl.yml")
 	if err != nil {
 		return "", err
 	}
@@ -34,6 +50,16 @@ func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaCon
 			os.RemoveAll(pathToInst)
 		}
 	}()
+
+	dirsToCreate := []string{
+		"jobs",
+	}
+
+	for _, dir := range dirsToCreate {
+		if err := os.MkdirAll(path.Join(pathToInst, dir), 0o700); err != nil {
+			return "", fmt.Errorf("create dir %s for instance: %s", dir, err)
+		}
+	}
 
 	composeFile, err := os.OpenFile(composePath, fileFlags, 0o644)
 	if err != nil {
@@ -60,7 +86,7 @@ func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaCon
 
 	caddyRouteJSON, err := os.ReadFile("./conf_tmpl/dawa/caddy-route.json")
 
-	endpoint := "http://localhost:2019/config/apps/http/servers/dcomms/routes"
+	endpoint := "http://localhost:2019/config/apps/http/servers/srv0/routes"
 	if err := caddySendRequest(ctx, endpoint, http.MethodPut, caddyRouteJSON); err != nil {
 		return "", err
 	}

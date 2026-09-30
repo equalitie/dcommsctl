@@ -79,14 +79,11 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstanceIns
 			}
 
 			instanceID := filepath.Base(instanceDir)
-			lockFilePath := path.Join(instanceDir, "."+jobType+".lock")
+			lockFilePath := path.Join(instanceDir, ".job.lock")
 
-			lockFile := jobLockFile(lockFilePath)
-
-			if lockFile == nil {
+			if err := jobTryToLockFile(lockFilePath); err != nil {
 				return InstanceInstallResult{}, fmt.Errorf("The job is in progress")
 			}
-			defer lockFile.Close()
 
 			pass := "test_pass"
 			cmd := exec.CommandContext(app.jobsManager.ctx, path.Join(app.systemCfg.AppsDir, "mastodon", "install.sh"))
@@ -132,12 +129,9 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstanceIns
 			instanceID := filepath.Base(instanceDir)
 			lockFilePath := path.Join(instanceDir, ".job.lock")
 
-			lockFile := jobLockFile(lockFilePath)
-
-			if lockFile == nil {
+			if err := jobTryToLockFile(lockFilePath); err != nil {
 				return InstanceInstallResult{}, fmt.Errorf("The job is in progress")
 			}
-			defer lockFile.Close()
 
 			cmd := exec.CommandContext(app.jobsManager.ctx, path.Join(app.systemCfg.AppsDir, "peertube", "install.sh"))
 			cmd.Dir = instanceDir
@@ -173,18 +167,15 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstanceIns
 			}
 
 			instanceID := filepath.Base(instanceDir)
-			lockFilePath := "." + jobType + ".lock"
+			lockFilePath := path.Join(instanceDir, ".job.lock")
 
-			lockFile := jobLockFile(path.Join(instanceDir, lockFilePath))
-
-			if lockFile == nil {
+			if err := jobTryToLockFile(lockFilePath); err != nil {
 				return InstanceInstallResult{}, fmt.Errorf("The job is in progress")
 			}
 
 			cmd := exec.CommandContext(app.jobsManager.ctx, path.Join(app.systemCfg.AppsDir, "dawa", "install.sh"))
 			cmd.Dir = instanceDir
 			cmd.Env = []string{
-				"LOCK_FILE=" + lockFilePath,
 				"APP_DIR=" + instanceDir,
 			}
 

@@ -211,9 +211,9 @@ func main() {
 	app.systemCfg.BackupsDir, _ = filepath.Abs("./.backups")
 
 	// TODO: debug this
-	// if err := app.initApps(rootContext); err != nil {
-	// 	panic(err)
-	// }
+	if err := app.initApps(rootContext); err != nil {
+		panic(err)
+	}
 
 	if err := app.jobsManager.loadJobs(); err != nil {
 		panic(err)

@@ -21,11 +21,9 @@ func (app *GlobalState) rpcInstanceUpgrade(ctx context.Context, args InstanceUpg
 	instanceID := args.InstanceName
 
 	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
-	lockFilePath := "." + jobType + ".lock"
+	lockFilePath := path.Join(instanceDir, ".job.lock")
 
-	lockFile := jobLockFile(path.Join(instanceDir, lockFilePath))
-
-	if lockFile == nil {
+	if err := jobTryToLockFile(path.Join(instanceDir, lockFilePath)); err != nil {
 		return InstanceUpgradeResult{}, fmt.Errorf("The job is in progress")
 	}
 

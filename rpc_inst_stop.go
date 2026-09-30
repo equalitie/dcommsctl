@@ -22,14 +22,11 @@ func (app *GlobalState) rpcInstanceStop(ctx context.Context, args InstanceStopAr
 	instanceID := args.InstanceName
 
 	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
-	lockFilePath := "." + jobType + ".lock"
+	lockFilePath := path.Join(instanceDir, ".job.lock")
 
-	lockFile := jobLockFile(path.Join(instanceDir, lockFilePath))
-
-	if lockFile == nil {
+	if err := jobTryToLockFile(path.Join(instanceDir, lockFilePath)); err != nil {
 		return InstanceStopResult{}, fmt.Errorf("The job is in progress")
 	}
-	defer lockFile.Close()
 
 	cmdArgs := []string{"compose", "down"}
 

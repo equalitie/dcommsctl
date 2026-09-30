@@ -93,16 +93,17 @@ func jobKey(instanceID, jobID string) string {
 	return instanceID + "-" + jobID
 }
 
-func jobLockFile(lockPath string) *os.File {
+// Expected when another job of the same type is already running: the lock file
+// exists, so O_EXCL fails.
+func jobTryToLockFile(lockPath string) error {
 	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
-		// Expected when another job of the same type is already running: the lock file
-		// exists, so O_EXCL fails. The caller treats a nil file as "already locked".
 		logError("cannot take job lock", "lock", lockPath, "err", err)
-		return nil
+		return err
 	}
+	f.Close()
 
-	return f
+	return nil
 }
 
 func NewJobManager(ctx context.Context) *JobManager {
@@ -275,7 +276,9 @@ func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jo
 	if err := cmd.Start(); err != nil {
 		logFile.Close()
 		os.Remove(logFilePath)
-		os.Remove(lockFilePath)
+		if err := os.Remove(lockFilePath); err != nil {
+			logError("Failed to remove lock file after Start", "err", err)
+		}
 		return err
 	}
 
@@ -297,14 +300,20 @@ func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jo
 
 	if err := m.dumpJobs(); err != nil {
 		logFile.Close()
-		os.Remove(lockFilePath)
+		if err := os.Remove(lockFilePath); err != nil {
+			logError("Failed to remove lock file after dumpjobs", "err", err)
+		}
 		return err
 	}
 
 	go func() {
 		defer func() {
 			logFile.Close()
-			os.Remove(lockFilePath)
+			if err := os.Remove(lockFilePath); err != nil {
+				fmt.Println(instanceID)
+				fmt.Println(jobType)
+				logError("Failed to remove lock file after the script is done", "err", err)
+			}
 		}()
 
 		cmdExecErr := cmd.Wait()
@@ -414,6 +423,7 @@ func (m *JobManager) absPath(path string) string {
 }
 
 func (m *JobManager) relPath(path string) string {
+	// TODO(max): I don't like that this silently succeeds
 	rel, err := filepath.Rel(m.jobsPath, path)
 	if err != nil {
 		return path
