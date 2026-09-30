@@ -5,120 +5,82 @@
     </head>
 
     <body>
+
         <script>
+            let reqID = 0;
             const ws = new WebSocket('ws://localhost:6006/ws');
 
-            let instanceId = null;
             let dawaInstanceId = null;
             let pendingInstallApp = null;
 
             ws.onopen = () => {
-              document.getElementById('result').textContent = 'connected';
+                document.getElementById('result').textContent = 'connected';
             };
 
             ws.onmessage = (event) => {
-              const data = JSON.parse(event.data);
+                const data = JSON.parse(event.data);
 
-                if (data.result.id) {
-                    if (pendingInstallApp === 'dawa') {
-                        dawaInstanceId = data.result.id;
-                    } else {
-                        instanceId = data.result.id;
+                if (data.error) {
+
+                } else {
+                    if (data.result.id) {
+                        document.getElementById("instance_id").value = data.result.id;
+                    } 
+                    if (data.result.job_id) {
+                        document.getElementById("job_id").value = data.result.job_id;
                     }
-                    pendingInstallApp = null;
                 }
 
-              document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+                document.getElementById('result').textContent = JSON.stringify(data, null, 2);
             };
 
             ws.onerror = (err) => {
-              document.getElementById('result').textContent = err;
+                document.getElementById('result').textContent = err;
             };
 
-            function sendInstall() {
-              pendingInstallApp = 'peertube';
-              ws.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'inst/install',
-                params: { name: "peertube", domain: "localhost" },
-                id: 1
-              }));
+            function send(method, params) {
+                ws.send(JSON.stringify({
+                    jsonrpc: '2.0',
+                    method,
+                    params,
+                    id: ++reqID
+                }));
+            }
+            function checkJobStatus() {
+                const jobID = document.getElementById("job_id").value;
+
+                send('job/status', { id: jobID });
+            }
+
+            function getJobLog() {
+                const jobID = document.getElementById("job_id").value;
+
+                send('job/log', { id: jobID });
+            }
+
+            function sendInstall(e) {
+                console.log(e);
+                const name = e.currentTarget.dataset.name;
+                send('inst/install', { name, domain: "localhost" });
             }
             function sendUninstall() {
-              ws.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'inst/uninstall',
-                params: { id: instanceId },
-                id: 1
-              }));
+                send('inst/uninstall', { id: instanceId });
             }
             function sendStart() {
-              ws.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'inst/start',
-                params: { id: instanceId },
-                id: 1
-              }));
+                send('inst/start', { id: instanceId });
             }
             function sendStop() {
-              ws.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'inst/stop',
-                params: { id: instanceId },
-                id: 1
-              }));
+                send('inst/stop', { id: instanceId });
             }
 
             function sendBackup() {
-              ws.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'inst/backup',
-                params: { id: instanceId },
-                id: 1
-              }));
-            }
-            function sendRestore() {
-              ws.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'inst/restore',
-                params: { id: instanceId },
-                id: 1
-              }));
+                send('inst/backup', { id: instanceId });
             }
 
-            function sendDawaInstall() {
-              pendingInstallApp = 'dawa';
-              ws.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'inst/install',
-                params: { name: "dawa" },
-                id: 1
-              }));
+            function sendRestore() {
+                send('inst/restore', { id: instanceId });
             }
-            function sendDawaUninstall() {
-              ws.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'inst/uninstall',
-                params: { id: dawaInstanceId },
-                id: 1
-              }));
-            }
-            function sendDawaStart() {
-              ws.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'inst/start',
-                params: { id: dawaInstanceId },
-                id: 1
-              }));
-            }
-            function sendDawaStop() {
-              ws.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'inst/stop',
-                params: { id: dawaInstanceId },
-                id: 1
-              }));
-            }
+
 
         </script>
 
@@ -126,9 +88,22 @@
         <div id="result"></div>
 
         <div>
-            <button onClick="sendInstall()">Install Peertube</button>
-        </div>
+            <button data-name="peertube" onclick="sendInstall(event)">Install Peertube</button>
+            <button data-name="mastodon" onclick="sendInstall(event)">Install Mastodon</button>
 
+            <div>
+                <label>Instance ID</label>
+                <input id="instance_id" type="text">
+            </div>
+            <div>
+                <label>Job ID</label>
+                <input id="job_id" type="text">
+
+                <button onClick="checkJobStatus(event)">Check status</button>
+
+                <div id="job_result"></div>
+            </div>
+        </div>
     </body>
 
 </html>
