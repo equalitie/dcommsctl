@@ -4,22 +4,23 @@ set -xoeu pipefail
 
 backup_dir="$BACKUP_ROOT/mastodon/$BACKUP_ID"
 completed=0
-
-source ./helpers.sh
+service_stopped=0
 
 cleanup() {
   status=$?
 
-  ./dcomms_compose.sh start mastodon-sidekiq 2>/dev/null
+  if [ "$service_stopped" -ne 0]
+      docker compose start mastodon-sidekiq 2>/dev/null
+  fi
 
   exit "$status"
 }
 
 trap cleanup EXIT
 
-./dcomms_compose.sh stop mastodon-sidekiq
+docker compose stop mastodon-sidekiq
 
-./dcomms_compose.sh exec -T mastodon-db sh -c \
+docker compose exec -T mastodon-db sh -c \
   'PGPASSWORD=$DB_PASSWORD dropdb \
     --force \
     -U "$DB_USER" \
@@ -31,7 +32,7 @@ gunzip -c "$backup_dir/pgump.sql.gz" | \
       -U "$DB_USER" \
       -d postgres' > /dev/null
 
-./dcomms_compose.sh exec -T mastodon-redis \
+docker compose exec -T mastodon-redis \
   redis-cli FLUSHALL
 
 docker run --rm \

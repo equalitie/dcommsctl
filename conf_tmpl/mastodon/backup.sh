@@ -7,23 +7,17 @@ set -oxeu pipefail
 final_dir="$BACKUP_ROOT/mastodon/$BACKUP_ID"
 work_dir="$final_dir.partial"
 completed=0
-# TODO: locks
-lock_acquired=0
-
-source ./helpers.sh
+service_stopped=0
 
 cleanup() {
   status=$?
 
-  ./dcomms_compose.sh start mastodon-sidekiq 2>/dev/null
+  if [ "$service_stopped" -ne 0 ]
+      docker compose start mastodon-sidekiq 2>/dev/null
+  fi
 
   if [ "$completed" -ne 1 ] && [ -n "${work_dir:-}" ] && [ -d "$work_dir" ]; then
     rm -rf -- "$work_dir"
-  fi
-
-  if [ "$lock_acquired" -eq 1 ]; then
-    rm -f -- "$lock_dir/owner"
-    rmdir "$lock_dir" 2>/dev/null || true
   fi
 
   exit "$status"
@@ -37,17 +31,18 @@ rm -rf "$final_dir"
 
 mkdir -p "$work_dir"
 
-./dcomms_compose.sh stop mastodon-sidekiq
+docker compose stop mastodon-sidekiq
+service_stopped=1
 
 # sleep 1
 
-./dcomms_compose.sh exec -T mastodon-db sh -c \
+docker compose exec -T mastodon-db sh -c \
   'PGPASSWORD=$DB_PASSWORD pg_dumpall 2>/dev/null \
     -U $DB_USER \
     -l $DB_NAME' | \
   gzip > "$work_dir/pgdump.sql.gz"
 
-./dcomms_compose.sh exec -T mastodon-redis sh -c \
+docker compose exec -T mastodon-redis sh -c \
   'redis-cli SAVE' | \
   gzip > "$work_dir/redis.rdb.gz"
 
