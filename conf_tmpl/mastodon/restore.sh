@@ -27,7 +27,7 @@ docker compose exec -T mastodon-db sh -c \
     "$DB_NAME"'
 
 gunzip -c "$backup_dir/pgump.sql.gz" | \
-  ./dcomms_compose.sh exec -T mastodon-db sh -c \
+  docker compose exec -T mastodon-db sh -c \
     'PGPASSWORD=$DB_PASSWORD psql \
       -U "$DB_USER" \
       -d postgres' > /dev/null
@@ -36,7 +36,7 @@ docker compose exec -T mastodon-redis \
   redis-cli FLUSHALL
 
 docker run --rm \
-  --volumes-from "$(./dcomms_compose.sh ps -aq mastodon-sidekiq)" \
+  --volumes-from "$(docker compose ps -aq mastodon-sidekiq)" \
   -v "$backup_dir:/backup:ro" \
   alpine:latest \
   sh -c 'rm -rf /mastodon/system/public/* /mastodon/system/public/.[!.]* /mastodon/system/public/..?* &&

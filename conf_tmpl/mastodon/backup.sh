@@ -48,7 +48,7 @@ docker compose exec -T mastodon-redis sh -c \
 
 docker run --rm \
   --user "$(id -u):$(id -g)" \
-  --volumes-from $(./dcomms_compose.sh ps -aq mastodon-sidekiq) \
+  --volumes-from $(docker compose ps -aq mastodon-sidekiq) \
   -v "$work_dir:/backup" \
   alpine:latest \
   tar czf /backup/content.tar.gz /mastodon/public/system
