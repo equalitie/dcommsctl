@@ -61,7 +61,7 @@
             function sendInstall(e) {
                 console.log(e);
                 const name = e.currentTarget.dataset.name;
-                send('inst/install', { name, domain: "localhost" });
+                send('inst/install', { name, domain: `${name}.localhost` });
             }
             function sendUninstall() {
                 send('inst/uninstall', { id: instanceId });
