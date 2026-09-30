@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,7 +13,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/sourcegraph/jsonrpc2"
@@ -252,27 +249,6 @@ type session struct {
 
 func newSession() *session { return &session{subs: map[string]func(){}} }
 
-// add stores cleanup under a fresh id and returns the id.
-func (s *session) add(cleanup func()) string {
-	id := newID()
-	s.mu.Lock()
-	s.subs[id] = cleanup
-	s.mu.Unlock()
-	return id
-}
-
-// take atomically removes and returns the cleanup for id, if present. Removing
-// before the caller runs it guarantees each cleanup fires at most once.
-func (s *session) take(id string) (func(), bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	c, ok := s.subs[id]
-	if ok {
-		delete(s.subs, id)
-	}
-	return c, ok
-}
-
 // takeAll atomically removes and returns every remaining cleanup.
 func (s *session) takeAll() []func() {
 	s.mu.Lock()
@@ -283,15 +259,6 @@ func (s *session) takeAll() []func() {
 		delete(s.subs, id)
 	}
 	return all
-}
-
-// TODO maybe using something with a higher uniqueness guarantee
-func newID() string {
-	var b [8]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return hex.EncodeToString([]byte(time.Now().Format(time.RFC3339Nano)))
-	}
-	return hex.EncodeToString(b[:])
 }
 
 type Server struct {
