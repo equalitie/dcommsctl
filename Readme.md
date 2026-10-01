@@ -23,6 +23,10 @@ There is a `schema_jrpc.json` file in the root folder. It is generated every ser
 
 This is far from complete. Look at the `rpc_*.go` files for arguments and return values.
 
+# Helper scripts
+
+`cleanup.sh` - stops all services running from `.instances` folder and removes the folder after
+
 # Logging
 
 Logs go to stdout as JSON, one object per line. `LOG_LEVEL` sets the minimum severity

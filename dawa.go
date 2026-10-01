@@ -10,8 +10,9 @@ import (
 )
 
 type DawaConfig struct {
-	Domain  string
-	PortOut int
+	Domain       string
+	PortOut      int
+	NginxDocRoot string
 }
 
 func dawaIsInstalled(instancesDir string) (bool, error) {
@@ -65,6 +66,7 @@ func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaCon
 	if err != nil {
 		return "", err
 	}
+	defer composeFile.Close()
 
 	if err := tmpl.Execute(composeFile, &config); err != nil {
 		return "", err
@@ -79,15 +81,36 @@ func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaCon
 	if err != nil {
 		return "", err
 	}
+	defer envFile.Close()
 
 	if err := envTmpl.Execute(envFile, &config); err != nil {
 		return "", err
 	}
 
-	caddyRouteJSON, err := os.ReadFile("./conf_tmpl/dawa/caddy-route.json")
+	routeTmpl, err := template.ParseFiles("./conf_tmpl/dawa/caddy-route.json")
+	if err != nil {
+		return "", err
+	}
+
+	caddyRouteFilePath := path.Join(pathToInst, "caddy-route.json")
+
+	caddyFile, err := os.OpenFile(caddyRouteFilePath, fileFlags, 0o644)
+	if err != nil {
+		return "", err
+	}
+	defer caddyFile.Close()
+
+	if err := routeTmpl.Execute(caddyFile, &config); err != nil {
+		return "", err
+	}
+	caddyRouteJSON, err := os.ReadFile(caddyRouteFilePath)
 
 	endpoint := "http://localhost:2019/config/apps/http/servers/srv0/routes"
-	if err := caddySendRequest(ctx, endpoint, http.MethodPut, caddyRouteJSON); err != nil {
+	if _, err := caddySendRequest(ctx, endpoint, http.MethodPost, caddyRouteJSON); err != nil {
+		return "", err
+	}
+
+	if err := caddyExportConfig(ctx, instancesDir); err != nil {
 		return "", err
 	}
 

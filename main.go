@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path"
 	"path/filepath"
@@ -153,11 +154,16 @@ func (app *GlobalState) pollJobStatus(ctx context.Context, jobID string) error {
 }
 
 func (app *GlobalState) initApps(ctx context.Context) error {
-	_, err := app.rpcInstanceInstall(ctx, InstanceInstallArgs{
+	cmd := exec.CommandContext(ctx, "./docker_setup.sh")
+
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("containers setup failed %s: %s", err, out)
+	}
+
+	if _, err := app.rpcInstanceInstall(ctx, InstanceInstallArgs{
 		AppName:    "caddy",
 		DomainName: "localhost",
-	})
-	if err != nil {
+	}); err != nil {
 		return err
 	}
 
@@ -241,6 +247,8 @@ func main() {
 	jRPCServer.Register("inst/backup", app.rpcInstanceBackup)
 	jRPCServer.Register("inst/restore", app.rpcInstanceRestore)
 	jRPCServer.Register("inst/upgrade", app.rpcInstanceUpgrade)
+
+	jRPCServer.Register("panic", app.rpcPanic)
 	// jRPCServer.Register("container/start", func() {})
 	// jRPCServer.Register("container/stop", func() {})
 

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"text/template"
 	"time"
 )
@@ -39,20 +40,20 @@ type CaddyRoute struct {
 	Terminal bool                  `json:"terminal"`
 }
 
-func caddyIsInstalled(instancesDir string) (bool, error) {
+func caddyInstancePath(instancesDir string) (string, error) {
 	pathToInst := path.Join(instancesDir, "caddy")
 	if _, err := os.Stat(pathToInst); err != nil {
 		if os.IsNotExist(err) {
-			return false, nil
+			return "", nil
 		}
 
-		return false, err
+		return "", err
 	}
 
-	return true, nil
+	return pathToInst, nil
 }
 
-func caddySendRequest(ctx context.Context, endpoint string, method string, payloadJSON []byte) error {
+func caddySendRequest(ctx context.Context, endpoint string, method string, payloadJSON []byte) ([]byte, error) {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		method,
@@ -60,7 +61,7 @@ func caddySendRequest(ctx context.Context, endpoint string, method string, paylo
 		bytes.NewReader(payloadJSON),
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	req.Header.Add("Content-Type", "application/json")
@@ -69,12 +70,13 @@ func caddySendRequest(ctx context.Context, endpoint string, method string, paylo
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Caddy's reply body; a non-2xx status is worth seeing here since the caller only
@@ -82,12 +84,15 @@ func caddySendRequest(ctx context.Context, endpoint string, method string, paylo
 	logJSON("caddy response", body,
 		"endpoint", endpoint, "status", resp.StatusCode)
 
-	return nil
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return body, fmt.Errorf("Caddy returned %s: %s", resp.Status, body)
+	}
+	return body, nil
 }
 
 func caddyAddRoute(ctx context.Context, instanceName, hostname, upstreamAddress string) error {
 	// FIXME: change server name
-	endpoint := "localhost:2019/config/apps/http/servers/srv0/routes"
+	endpoint := "http://localhost:2019/config/apps/http/servers/srv0/routes"
 
 	payload := CaddyRoute{
 		ID: instanceName,
@@ -110,7 +115,7 @@ func caddyAddRoute(ctx context.Context, instanceName, hostname, upstreamAddress 
 		return err
 	}
 
-	if err := caddySendRequest(ctx, endpoint, http.MethodPost, payloadJSON); err != nil {
+	if _, err := caddySendRequest(ctx, endpoint, http.MethodPost, payloadJSON); err != nil {
 		return err
 	}
 
@@ -119,7 +124,7 @@ func caddyAddRoute(ctx context.Context, instanceName, hostname, upstreamAddress 
 
 func caddyDropRoute(ctx context.Context, instanceName string) error {
 	// FIXME: untested, change payload type
-	endpoint := "localhost:2019/config/apps/http/servers/srv0/routes"
+	endpoint := "http://localhost:2019/config/apps/http/servers/srv0/routes"
 
 	payload := CaddyRoute{
 		ID: instanceName,
@@ -129,7 +134,7 @@ func caddyDropRoute(ctx context.Context, instanceName string) error {
 	if err != nil {
 		return err
 	}
-	if err := caddySendRequest(ctx, endpoint, http.MethodDelete, payloadJSON); err != nil {
+	if _, err := caddySendRequest(ctx, endpoint, http.MethodDelete, payloadJSON); err != nil {
 		return err
 	}
 
@@ -145,7 +150,7 @@ func caddyCreateInstance(instancesDir string, config CaddyConfig) (string, error
 	}
 	pathToInst := path.Join(instancesDir, "caddy")
 
-	if alreadyInstalled, err := caddyIsInstalled(instancesDir); alreadyInstalled {
+	if caddyInstancePath, err := caddyInstancePath(instancesDir); caddyInstancePath != "" {
 		return pathToInst, nil
 	} else if err != nil {
 		return "", err
@@ -191,4 +196,46 @@ func caddyCreateInstance(instancesDir string, config CaddyConfig) (string, error
 	}
 
 	return pathToInst, nil
+}
+
+func caddyExportConfig(ctx context.Context, instancesDir string) error {
+	caddyInstanceDir, _ := caddyInstancePath(instancesDir)
+
+	if caddyInstanceDir == "" {
+		return fmt.Errorf("Caddy was not installed, something is wrong with your setup, Caddy should be installed by default")
+	}
+
+	destination := path.Join(caddyInstanceDir, "config.json")
+	endpoint := "http://localhost:2019/config/"
+	data, err := caddySendRequest(ctx, endpoint, http.MethodGet, nil)
+	if err != nil {
+		return err
+	}
+	// Preserve raw JSON, including unknown module fields and exact numbers.
+	f, err := os.CreateTemp(filepath.Dir(destination), ".caddy-config-*.json")
+	if err != nil {
+		return fmt.Errorf("create temporary config file: %s", err)
+	}
+	tempName := f.Name()
+	defer func() {
+		f.Close()
+		os.Remove(tempName)
+	}()
+
+	if _, err := f.Write(data); err != nil {
+		return fmt.Errorf("write Caddy config: %s", err)
+	}
+
+	if err := f.Sync(); err != nil {
+		return fmt.Errorf("sync Caddy config: %s", err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close Caddy config: %s", err)
+	}
+
+	if err := os.Rename(tempName, destination); err != nil {
+		return fmt.Errorf("replace Caddy config file: %s", err)
+	}
+
+	return nil
 }
