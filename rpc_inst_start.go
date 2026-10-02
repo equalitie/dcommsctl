@@ -8,7 +8,7 @@ import (
 )
 
 type InstanceStartArgs struct {
-	InstanceName string `json:"id"`
+	InstanceID string `json:"id"`
 }
 
 type InstanceStartResult struct {
@@ -20,13 +20,13 @@ func (app *GlobalState) rpcInstanceStart(ctx context.Context, args InstanceStart
 
 	jobID := jobID(jobType)
 
-	instanceID := args.InstanceName
+	instanceID := args.InstanceID
 	if instanceID == "" {
 		return InstanceStartResult{}, fmt.Errorf("No instance specified")
 	}
 
-	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
-	lockFilePath := path.Join(instanceDir, ".job.lock")
+	pathToInst := path.Join(app.systemCfg.InstancesDir, instanceID)
+	lockFilePath := path.Join(pathToInst, ".job.lock")
 
 	if err := jobTryToLockFile(lockFilePath); err != nil {
 		return InstanceStartResult{}, fmt.Errorf("The job is in progress")
@@ -35,7 +35,7 @@ func (app *GlobalState) rpcInstanceStart(ctx context.Context, args InstanceStart
 	cmdArgs := []string{"compose", "--project-name", instanceID, "up", "-d"}
 
 	cmd := exec.CommandContext(app.jobsManager.ctx, "docker", cmdArgs...)
-	cmd.Dir = instanceDir
+	cmd.Dir = pathToInst
 
 	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
 		return InstanceStartResult{}, err

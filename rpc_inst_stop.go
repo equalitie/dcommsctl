@@ -8,7 +8,7 @@ import (
 )
 
 type InstanceStopArgs struct {
-	InstanceName string `json:"id"`
+	InstanceID string `json:"id"`
 }
 
 type InstanceStopResult struct {
@@ -19,19 +19,19 @@ func (app *GlobalState) rpcInstanceStop(ctx context.Context, args InstanceStopAr
 	jobType := "stop"
 	jobID := jobID(jobType)
 
-	instanceID := args.InstanceName
+	instanceID := args.InstanceID
 
-	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
-	lockFilePath := path.Join(instanceDir, ".job.lock")
+	pathToInst := path.Join(app.systemCfg.InstancesDir, instanceID)
+	lockFilePath := path.Join(pathToInst, ".job.lock")
 
-	if err := jobTryToLockFile(path.Join(instanceDir, lockFilePath)); err != nil {
+	if err := jobTryToLockFile(path.Join(pathToInst, lockFilePath)); err != nil {
 		return InstanceStopResult{}, fmt.Errorf("The job is in progress")
 	}
 
 	cmdArgs := []string{"compose", "down"}
 
 	cmd := exec.CommandContext(app.jobsManager.ctx, "docker", cmdArgs...)
-	cmd.Dir = instanceDir
+	cmd.Dir = pathToInst
 	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
 		return InstanceStopResult{}, err
 	}

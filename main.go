@@ -187,7 +187,7 @@ func (app *GlobalState) initApps(ctx context.Context) error {
 	}
 
 	caddyStartResult, err := app.rpcInstanceStart(ctx, InstanceStartArgs{
-		InstanceName: "caddy",
+		InstanceID: "caddy",
 	})
 	if err != nil {
 		return err
