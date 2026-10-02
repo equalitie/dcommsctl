@@ -3,9 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
-	"text/template"
 )
 
 type AdminConfig struct {
@@ -34,36 +32,32 @@ func peertubeCreateInstance(ctx context.Context, instancesDir string, config Pee
 	}
 
 	pathToApp := path.Join("conf_tmpl", "peertube")
-	tmpl, err := template.ParseFiles(path.Join(pathToApp, "docker-compose.tmpl.yml"))
-	if err != nil {
-		return "", err
-	}
-
 	pathToInst, err := instanceCreate(instancesDir, "peertube")
 	if err != nil {
 		return "", err
 	}
 
-	composeFile, err := os.OpenFile(path.Join(pathToInst, "docker-compose.yml"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
-	if err != nil {
+	if err := executeTemplate(
+		path.Join(pathToApp, "docker-compose.tmpl.yml"),
+		path.Join(pathToInst, "docker-compose.yml"),
+		&config,
+	); err != nil {
 		return "", err
 	}
 
-	if err := tmpl.Execute(composeFile, &config); err != nil {
+	if err := executeTemplate(
+		path.Join(pathToApp, "env.tmpl"),
+		path.Join(pathToInst, "env"),
+		&config,
+	); err != nil {
 		return "", err
 	}
 
-	envTmpl, err := template.ParseFiles(path.Join(pathToApp, "env.tmpl"))
-	if err != nil {
-		return "", err
-	}
-
-	envFile, err := os.OpenFile(path.Join(pathToInst, "env"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
-	if err != nil {
-		return "", err
-	}
-
-	if err := envTmpl.Execute(envFile, &config); err != nil {
+	if err := executeTemplate(
+		path.Join(pathToApp, "caddy-route.tmpl.json"),
+		path.Join(pathToInst, "caddy-route.json"),
+		&config,
+	); err != nil {
 		return "", err
 	}
 

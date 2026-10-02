@@ -3,9 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
-	"text/template"
 	// "github.com/compose-spec/compose-go/v2/cli"
 )
 
@@ -28,38 +26,32 @@ func mastodonCreateInstance(ctx context.Context, instancesDir string, config Mas
 	}
 	pathToApp := path.Join("conf_tmpl", "mastodon")
 
-	tmpl, err := template.ParseFiles(path.Join(pathToApp, "docker-compose.tmpl.yml"))
-	if err != nil {
-		return "", err
-	}
-
-	fileFlags := os.O_CREATE | os.O_EXCL | os.O_WRONLY
-
 	pathToInst, err := instanceCreate(instancesDir, "mastodon")
 	if err != nil {
 		return "", err
 	}
 
-	composeFile, err := os.OpenFile(path.Join(pathToInst, "docker-compose.yml"), fileFlags, 0o644)
-	if err != nil {
+	if err := executeTemplate(
+		path.Join(pathToApp, "docker-compose.tmpl.yml"),
+		path.Join(pathToInst, "docker-compose.yml"),
+		&config,
+	); err != nil {
 		return "", err
 	}
 
-	if err := tmpl.Execute(composeFile, &config); err != nil {
+	if err := executeTemplate(
+		path.Join(pathToApp, "env.tmpl"),
+		path.Join(pathToInst, "env"),
+		&config,
+	); err != nil {
 		return "", err
 	}
 
-	envTmpl, err := template.ParseFiles(path.Join(pathToApp, "env.tmpl"))
-	if err != nil {
-		return "", err
-	}
-
-	envFile, err := os.OpenFile(path.Join(pathToInst, "env"), fileFlags, 0o644)
-	if err != nil {
-		return "", err
-	}
-
-	if err := envTmpl.Execute(envFile, &config); err != nil {
+	if err := executeTemplate(
+		path.Join(pathToApp, "caddy-route.tmpl.json"),
+		path.Join(pathToInst, "caddy-route.json"),
+		&config,
+	); err != nil {
 		return "", err
 	}
 

@@ -1,0 +1,27 @@
+
+{
+  "@id": "peertube-route",
+  "match": [
+    {
+      "host": [
+        "{{ .Domain }}"
+      ]
+    }
+  ],
+  "handle": [
+    {
+      "handler": "subroute",
+      "routes": [
+        {
+          "handle": [
+            {
+              "handler": "reverse_proxy",
+              "upstreams": [
+                {
+                  "dial": "peertube:{{ .PortWebUI }}"
+                }
+              ]
+            }
+        }
+    }
+}

@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"syscall"
+	"text/template"
 	"time"
 )
 
@@ -129,6 +130,24 @@ func crashLogInit() {
 	}
 }
 
+func executeTemplate(tmplPath, targetPath string, data any) error {
+	tmpl, err := template.ParseFiles(tmplPath)
+	if err != nil {
+		return err
+	}
+
+	composeFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+
+	if err := tmpl.Execute(composeFile, &data); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (app *GlobalState) pollJobStatus(ctx context.Context, jobID string) error {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -241,7 +260,7 @@ func main() {
 	jRPCServer.Register("inst/start", app.rpcInstanceStart)
 	jRPCServer.Register("inst/stop", app.rpcInstanceStop)
 
-	jRPCServer.Register("inst/expose", rpcInstanceExpose)
+	jRPCServer.Register("inst/expose", app.rpcInstanceExpose)
 	jRPCServer.Register("inst/hide", rpcInstanceHide)
 
 	jRPCServer.Register("inst/backup", app.rpcInstanceBackup)
