@@ -3,7 +3,7 @@
   "match": [
     {
       "host": [
-        "{{ .Host }}"
+        "{{ .Domain }}"
       ]
     }
   ],
@@ -32,53 +32,13 @@
                   "set": {
                     "X-Real-IP": [
                       "{http.request.remote.host}"
-                    ],
-                    "X-Forwarded-For": [
-                      "{http.request.remote.host}"
-                    ],
-                    "X-Forwarded-Proto": [
-                      "{http.request.scheme}"
-                    ],
-                    "Host": [
-                      "{http.request.host}"
                     ]
                   }
                 }
               },
-              "transport": {
-                "protocol": "http",
-                "dial_timeout": 60000000000,
-                "read_timeout": 60000000000,
-                "write_timeout": 60000000000,
-                "versions": ["h2c"],
-                "websocket": {
-                  "enabled": true,
-                  "write_timeout": 60000000000
-                }
-              },
               "flush_interval": -1
             }
-          ],
-          "terminal": true
-        },
-        {
-          "match": [
-            {
-              "file": {
-                "root": "{{ .NginxDocRoot }}",
-                "try_files": [
-                  "{http.request.uri.path}"
-                ]
-              }
-            }
-          ],
-          "handle": [
-            {
-              "handler": "file_server",
-              "root": "{{ .NginxDocRoot }}"
-            }
-          ],
-          "terminal": true
+          ]
         },
         {
           "handle": [
@@ -94,22 +54,12 @@
                   "set": {
                     "X-Real-IP": [
                       "{http.request.remote.host}"
-                    ],
-                    "X-Forwarded-For": [
-                      "{http.request.remote.host}"
-                    ],
-                    "X-Forwarded-Proto": [
-                      "{http.request.scheme}"
-                    ],
-                    "Host": [
-                      "{http.request.host}"
                     ]
                   }
                 }
               }
             }
-          ],
-          "terminal": true
+          ]
         }
       ]
     }
