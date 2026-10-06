@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"text/template"
 )
 
 type DawaConfig struct {
@@ -31,19 +30,11 @@ func dawaIsInstalled(instancesDir string) (bool, error) {
 func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaConfig) (string, error) {
 	// FIXME: this is a temporary measure, cause we ideally want to have multiple instances of dawa
 	// or maybe we need another mechanism to upgrade dawa
+	pathToApp := path.Join("conf_tmpl", "dawa")
 	pathToInst := path.Join(instancesDir, "dawa")
 	if installed, _ := dawaIsInstalled(instancesDir); installed {
 		return pathToInst, nil
 	}
-
-	tmpl, err := template.ParseFiles("./conf_tmpl/dawa/docker-compose.tmpl.yml")
-	if err != nil {
-		return "", err
-	}
-
-	composePath := path.Join(pathToInst, "docker-compose.yml")
-	envPath := path.Join(pathToInst, "env")
-	fileFlags := os.O_CREATE | os.O_EXCL | os.O_WRONLY
 
 	completed := false
 	defer func() {
@@ -62,48 +53,35 @@ func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaCon
 		}
 	}
 
-	composeFile, err := os.OpenFile(composePath, fileFlags, 0o644)
-	if err != nil {
-		return "", err
-	}
-	defer composeFile.Close()
-
-	if err := tmpl.Execute(composeFile, &config); err != nil {
-		return "", err
-	}
-
-	envTmpl, err := template.ParseFiles("./conf_tmpl/dawa/env")
-	if err != nil {
+	if err := executeTemplate(
+		path.Join(pathToApp, "docker-compose.tmpl.yml"),
+		path.Join(pathToInst, "docker-compose.yml"),
+		&config,
+	); err != nil {
 		return "", err
 	}
 
-	envFile, err := os.OpenFile(envPath, fileFlags, 0o644)
-	if err != nil {
-		return "", err
-	}
-	defer envFile.Close()
-
-	if err := envTmpl.Execute(envFile, &config); err != nil {
-		return "", err
-	}
-
-	routeTmpl, err := template.ParseFiles("./conf_tmpl/dawa/caddy-route.json")
-	if err != nil {
+	if err := executeTemplate(
+		path.Join(pathToApp, "env.tmpl"),
+		path.Join(pathToInst, "env"),
+		&config,
+	); err != nil {
 		return "", err
 	}
 
 	caddyRouteFilePath := path.Join(pathToInst, "caddy-route.json")
+	if err := executeTemplate(
+		path.Join(pathToApp, "caddy-route.tmpl.json"),
+		caddyRouteFilePath,
+		&config,
+	); err != nil {
+		return "", err
+	}
 
-	caddyFile, err := os.OpenFile(caddyRouteFilePath, fileFlags, 0o644)
+	caddyRouteJSON, err := os.ReadFile(caddyRouteFilePath)
 	if err != nil {
 		return "", err
 	}
-	defer caddyFile.Close()
-
-	if err := routeTmpl.Execute(caddyFile, &config); err != nil {
-		return "", err
-	}
-	caddyRouteJSON, err := os.ReadFile(caddyRouteFilePath)
 
 	endpoint := "http://localhost:2019/config/apps/http/servers/srv0/routes"
 	if _, err := caddySendRequest(ctx, endpoint, http.MethodPost, caddyRouteJSON); err != nil {
