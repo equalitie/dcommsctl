@@ -32,7 +32,7 @@ func (app *GlobalState) rpcInstanceStart(ctx context.Context, args InstanceStart
 		return InstanceStartResult{}, fmt.Errorf("The job is in progress")
 	}
 
-	cmdArgs := []string{"compose", "--project-name", instanceID, "up", "-d"}
+	cmdArgs := []string{"compose", "--project-name", instanceID, "up", "--wait", "--wait-timeout", "120"}
 
 	cmd := exec.CommandContext(app.jobsManager.ctx, "docker", cmdArgs...)
 	cmd.Dir = pathToInst
