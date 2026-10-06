@@ -6,6 +6,12 @@ set -a
 source ./.env || exit 1
 set +a
 
+cleanup() {
+    docker compose down
+}
+
+trap cleanup EXIT ERR
+
 printf "[DCOMMS State] Generating Peertube config\n"
 
 PEERTUBE_SECRET=$(openssl rand -hex 32)
@@ -16,8 +22,6 @@ printf "[DCOMMS State] Starting peertube app\n"
 
 docker compose up --wait
 
-printf "[DCOMMS State] Performing peertube post-install\n"
-
 printf "[DCOMMS State] Configuring SSO\n"
 
 docker compose exec -T -u peertube peertube-back \
@@ -25,6 +29,7 @@ docker compose exec -T -u peertube peertube-back \
   --npm-name peertube-plugin-auth-openid-connect
 docker compose restart peertube-back
 
+# pinging it after restart to make sure it's running
 ready=false
 for ((attempt = 0; attempt < 60; attempt++)); do
   if docker compose exec -T peertube-back \
@@ -51,7 +56,7 @@ client_json=$(docker compose exec -T peertube-back curl -fsS \
 client_id=$(jq -er '.client_id // empty' <<< "$client_json")
 client_secret=$(jq -er '.client_secret // empty' <<< "$client_json")
 
-# Pass the password through stdin.
+# fetching admin token
 token_json=$(
   printf '%s' "$PT_INITIAL_ROOT_PASSWORD" |
   docker compose exec peertube-back curl -fsS \
@@ -78,9 +83,9 @@ docker compose exec peertube-back curl -fsS -X PUT \
       "client-secret": "$AUTH_CLIENT_SECRET",
       "issuer": "https://dawa.localhost"
     }
-}'
+  }'
 
 docker compose down
 
-printf "[DCOMMS State] Peertube post-install done\n"
+printf "[DCOMMS State] Peertube SSO configuration done\n"
 
