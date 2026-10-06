@@ -27,6 +27,8 @@ func (app *GlobalState) rpcInstanceExpose(ctx context.Context, args InstanceExpo
 		return InstanceExposeResult{}, fmt.Errorf("The job is in progress")
 	}
 
+	defer os.Remove(lockFilePath)
+
 	caddyRouteFilePath := path.Join(pathToInst, "caddy-route.json")
 
 	caddyFile, err := os.OpenFile(caddyRouteFilePath, os.O_RDONLY, 0o644)

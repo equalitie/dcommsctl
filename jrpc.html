@@ -52,7 +52,7 @@
                     if (data.result.instances) {
                         let html = '<table>';
                         for (const inst of data.result.instances) {
-                            html += `<tr><td>${inst.id}</td><td>${inst.app}</td><td>${inst.status}</td><td>${inst.version}</td><td><button onclick="sendBackup('${inst.id}')">backup</button><button onclick="sendRestore('${inst.id}')">restore</button></td></tr>`;
+                            html += `<tr><td>${inst.id}</td><td>${inst.app}</td><td>${inst.status}</td><td>${inst.version}</td><td><button onclick="sendBackup('${inst.id}')">backup</button><button onclick="sendRestore('${inst.id}')">restore</button><button onclick="exposeInstance('${inst.id}')">expose</button></td></tr>`;
                         }
 
                         html += '</table>';
@@ -116,6 +116,9 @@
 
             function sendRestore(instanceId) {
                 send('inst/restore', { id: instanceId });
+            }
+            function exposeInstance(instanceId) {
+                send('inst/expose', { id: instanceId });
             }
 
 
