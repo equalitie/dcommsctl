@@ -16,6 +16,6 @@ printf "[DCOMMS State] Starting dawa app\n"
 
 export DOCKER_GID=$(getent group docker | cut -d: -f3)
 
-docker compose up -d
+docker compose up --wait
 
 printf "[DCOMMS State] Dawa install done\n"

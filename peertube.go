@@ -47,7 +47,7 @@ func peertubeCreateInstance(ctx context.Context, instancesDir string, config Pee
 
 	if err := executeTemplate(
 		path.Join(pathToApp, "env.tmpl"),
-		path.Join(pathToInst, "env"),
+		path.Join(pathToInst, ".env"),
 		&config,
 	); err != nil {
 		return "", err
@@ -58,6 +58,10 @@ func peertubeCreateInstance(ctx context.Context, instancesDir string, config Pee
 		path.Join(pathToInst, "caddy-route.json"),
 		&config,
 	); err != nil {
+		return "", err
+	}
+
+	if err := caddyExportConfig(ctx, instancesDir); err != nil {
 		return "", err
 	}
 

@@ -1,6 +1,10 @@
 #!/bin/bash
 
-set -e
+set -voeu pipefail
+
+set -a
+source ./.env
+set +a
 
 #Mastodon's config file requires a number of keys to be generated. We spin up a temporary container to do this.
 #Volume must be removed before running
@@ -32,12 +36,12 @@ ACTIVE_RECORD_ENCRYPTION_FRIENDLY_KEYS=${ACTIVE_RECORD_ENCRYPTION//$'\n'/\\$'\n'
 
 #REDIS_PW=$(openssl rand -base64 12)
 
-sed -i "s/SECRET_KEY_BASE=/&$SECRET_KEY_BASE/" ./env
-sed -i "s/OTP_SECRET=/&$OTP_SECRET/" ./env
-sed -i "s/VAPID_KEYS=/$VAPID_FRIENDLY_KEYS/" ./env
-sed -i "s/ACTIVE_RECORD=/$ACTIVE_RECORD_ENCRYPTION_FRIENDLY_KEYS/" ./env
-sed -i 's/\r$//g' ./env
-#sed -i "s/REDIS_PASSWORD=/&$REDIS_PW/" ./env
+sed -i "s/SECRET_KEY_BASE=/&$SECRET_KEY_BASE/" ./.env
+sed -i "s/OTP_SECRET=/&$OTP_SECRET/" ./.env
+sed -i "s/VAPID_KEYS=/$VAPID_FRIENDLY_KEYS/" ./.env
+sed -i "s/ACTIVE_RECORD=/$ACTIVE_RECORD_ENCRYPTION_FRIENDLY_KEYS/" ./.env
+sed -i 's/\r$//g' ./.env
+#sed -i "s/REDIS_PASSWORD=/&$REDIS_PW/" ./.env
 
 printf "[DCOMMS State] Initializing mastodon database\n"
 

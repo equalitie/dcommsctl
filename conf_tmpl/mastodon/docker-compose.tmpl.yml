@@ -14,7 +14,7 @@ services:
     image: redis:7.0-alpine
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
-    env_file: ./env
+    env_file: ./.env
     volumes:
       - mastodon_redis:/data
     networks:
@@ -26,7 +26,7 @@ services:
       - bash
       - -c
       - "cd /opt/mastodon && /usr/bin/tini -- bundle exec rails server"
-    env_file: ./env
+    env_file: ./.env
     ports:
       - "127.0.0.1:3000:{{ .PortWebUI }}"
     command: bash -c "rm -f /mastodon/tmp/pids/server.pid; bundle exec rails s -p 3000"
@@ -48,7 +48,7 @@ services:
     healthcheck:
       test: wget -q --spider --proxy=off localhost:4000/api/v1/streaming/health || exit 1
         ]
-    env_file: ./env
+    env_file: ./.env
     ports:
       - "127.0.0.1:4000:{{ .PortStreaming }}"
     command: node ./streaming
@@ -67,7 +67,7 @@ services:
      - "/usr/bin/tini -- bundle exec sidekiq"
     healthcheck:
       test: ps aux | grep '[s]idekiq\ 6' || false
-    env_file: ./env
+    env_file: ./.env
     depends_on:
       - mastodon-db
       - mastodon-redis

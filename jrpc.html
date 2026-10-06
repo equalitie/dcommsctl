@@ -1,160 +1,173 @@
 <html>
+  <head></head>
+  <body>
+    <script>
+      let reqID = 0;
+      const ws = new WebSocket('ws://localhost:6006/ws');
 
-    <head>
+      let dawaInstanceId = null;
+      let pendingInstallApp = null;
 
-    </head>
+      ws.onopen = () => {
+        document.getElementById('result').textContent = 'connected';
 
-    <body>
+        getAllJobs();
+        getAllInstances();
+      };
 
-        <script>
-            let reqID = 0;
-            const ws = new WebSocket('ws://localhost:6006/ws');
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
 
-            let dawaInstanceId = null;
-            let pendingInstallApp = null;
+        if (data.error) {
 
-            ws.onopen = () => {
-                document.getElementById('result').textContent = 'connected';
+        } else {
+          if (data.result.id) {
+            document.getElementById("instance_id").value = data.result.id;
+          }
+          if (data.result.job_id) {
+            document.getElementById("job_id").value = data.result.job_id;
+          }
 
-                getAllJobs();
-                getAllInstances();
-            };
+          if (data.result.log) {
+            document.getElementById("job_log").innerText = data.result.log;
+          }
 
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
+          if (data.result.jobs) {
 
-                if (data.error) {
-
-                } else {
-                    if (data.result.id) {
-                        document.getElementById("instance_id").value = data.result.id;
-                    } 
-                    if (data.result.job_id) {
-                        document.getElementById("job_id").value = data.result.job_id;
-                    }
-
-                    if (data.result.log) {
-                        document.getElementById("job_log").innerText = data.result.log;
-                    }
-
-                    if (data.result.jobs) {
-
-                        let html = '<table>';
-                        for (const jb of data.result.jobs) {
-                            html += `<tr><td>${jb.id}</td><td>${jb.type}</td><td>${jb.state}</td><td>${jb.exit_code}</td><td><button onclick="checkJobStatus('${jb.id}')">status</button><button onclick="checkJobLog('${jb.id}')">log</button></td></tr>`;
-                        }
-
-                        html += '</table>';
-
-                        document.getElementById('jobs').innerHTML = html;
-
-                    }
-                    if (data.result.instances) {
-                        let html = '<table>';
-                        for (const inst of data.result.instances) {
-                            html += `<tr><td>${inst.id}</td><td>${inst.app}</td><td>${inst.status}</td><td>${inst.version}</td><td><button onclick="sendBackup('${inst.id}')">backup</button><button onclick="sendRestore('${inst.id}')">restore</button><button onclick="exposeInstance('${inst.id}')">expose</button></td></tr>`;
-                        }
-
-                        html += '</table>';
-
-                        document.getElementById('instances').innerHTML = html;
-                    }
-                }
-
-                document.getElementById('result').textContent = JSON.stringify(data, null, 2);
-            };
-
-            ws.onerror = (err) => {
-                document.getElementById('result').textContent = err;
-            };
-
-            function send(method, params) {
-                ws.send(JSON.stringify({
-                    jsonrpc: '2.0',
-                    method,
-                    params,
-                    id: ++reqID
-                }));
-            }
-            function getAllJobs() {
-                send('job/list');
-            }
-            function getAllInstances() {
-                send('inst/list');
-            }
-            function checkJobStatus(jobID) {
-                send('job/status', { id: jobID });
-            }
-            function checkJobLog(jobID) {
-                send('job/log', { id: jobID });
+            let html = '<table>';
+            for (const jb of data.result.jobs) {
+              html += `<tr><td>${jb.id}</td><td>${jb.type}</td><td>${jb.state}</td><td>${jb.exit_code}</td><td><button onclick="checkJobStatus('${jb.id}')">status</button><button onclick="checkJobLog('${jb.id}')">log</button></td></tr>`;
             }
 
-            function getJobLog() {
-                const jobID = document.getElementById("job_id").value;
+            html += '</table>';
 
-                send('job/log', { id: jobID });
+            document.getElementById('jobs').innerHTML = html;
+
+          }
+          if (data.result.instances) {
+            let html = '<table>';
+            for (const inst of data.result.instances) {
+              html += `<tr><td>${inst.id}</td><td>${inst.app}</td><td>${inst.status}</td><td>${inst.version}</td><td><button onclick="sendBackup('${inst.id}')">backup</button><button onclick="sendRestore('${inst.id}')">restore</button><button onclick="exposeInstance('${inst.id}')">expose</button></td></tr>`;
             }
 
-            function sendInstall(e) {
-                console.log(e);
-                const name = e.currentTarget.dataset.name;
-                send('inst/install', { name, domain: `${name}.localhost` });
-            }
-            function sendUninstall() {
-                send('inst/uninstall', { id: instanceId });
-            }
-            function sendStart(instanceId) {
-                send('inst/start', { id: instanceId });
-            }
-            function sendStop(instanceId) {
-                send('inst/stop', { id: instanceId });
-            }
+            html += '</table>';
 
-            function sendBackup(instanceId) {
-                send('inst/backup', { id: instanceId });
-            }
+            document.getElementById('instances').innerHTML = html;
+          }
+        }
 
-            function sendRestore(instanceId) {
-                send('inst/restore', { id: instanceId });
-            }
-            function exposeInstance(instanceId) {
-                send('inst/expose', { id: instanceId });
-            }
+        document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+      };
 
+      ws.onerror = (err) => {
+        document.getElementById('result').textContent = err;
+      };
 
-        </script>
+      function send(method, params) {
+        ws.send(JSON.stringify({
+          jsonrpc: '2.0',
+          method,
+          params,
+          id: ++reqID
+        }));
+      }
 
+      function getAllJobs() {
+        send('job/list');
+      }
 
+      function getAllInstances() {
+        send('inst/list');
+      }
 
-        <div>
-            <button data-name="peertube" onclick="sendInstall(event)">Install Peertube</button>
-            <button data-name="mastodon" onclick="sendInstall(event)">Install Mastodon</button>
+      function checkJobStatus(jobID) {
+        send('job/status', {
+          id: jobID
+        });
+      }
 
-            <div>
-                <button onclick="getAllJobs()">Get jobs</button>
-                <div id="jobs"></div>
-            </div>
-            <div>
-                <button onclick="getAllInstances()">Get instances</button>
-                <div id="instances"></div>
-            </div>
+      function checkJobLog(jobID) {
+        send('job/log', {
+          id: jobID
+        });
+      }
 
-            <div>
-                <label>Instance ID</label>
-                <input id="instance_id" type="text">
-            </div>
-            <div>
-                <label>Job ID</label>
-                <input id="job_id" type="text">
+      function getJobLog() {
+        const jobID = document.getElementById("job_id").value;
 
-                <button onClick="checkJobStatus(document.getElementByID('job_id').value)">Check status</button>
+        send('job/log', {
+          id: jobID
+        });
+      }
 
-                <div id="job_result"></div>
-            </div>
-        </div>
+      function sendInstall(e) {
+        console.log(e);
+        const name = e.currentTarget.dataset.name;
+        send('inst/install', {
+          name,
+          domain: `${name}.localhost`
+        });
+      }
 
-        <pre id="job_log"></pre>
-        <pre id="result"></pre>
-    </body>
+      function sendUninstall() {
+        send('inst/uninstall', {
+          id: instanceId
+        });
+      }
 
+      function sendStart(instanceId) {
+        send('inst/start', {
+          id: instanceId
+        });
+      }
+
+      function sendStop(instanceId) {
+        send('inst/stop', {
+          id: instanceId
+        });
+      }
+
+      function sendBackup(instanceId) {
+        send('inst/backup', {
+          id: instanceId
+        });
+      }
+
+      function sendRestore(instanceId) {
+        send('inst/restore', {
+          id: instanceId
+        });
+      }
+
+      function exposeInstance(instanceId) {
+        send('inst/expose', {
+          id: instanceId
+        });
+      }
+    </script>
+    <div>
+      <button data-name="peertube" onclick="sendInstall(event)">Install Peertube</button>
+      <button data-name="mastodon" onclick="sendInstall(event)">Install Mastodon</button>
+      <div>
+        <button onclick="getAllJobs()">Get jobs</button>
+        <div id="jobs"></div>
+      </div>
+      <div>
+        <button onclick="getAllInstances()">Get instances</button>
+        <div id="instances"></div>
+      </div>
+      <div>
+        <label>Instance ID</label>
+        <input id="instance_id" type="text">
+      </div>
+      <div>
+        <label>Job ID</label>
+        <input id="job_id" type="text">
+        <button onClick="checkJobStatus(document.getElementByID('job_id').value)">Check status</button>
+        <div id="job_result"></div>
+      </div>
+    </div>
+    <pre id="job_log"></pre>
+    <pre id="result"></pre>
+  </body>
 </html>

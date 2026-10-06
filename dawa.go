@@ -63,7 +63,7 @@ func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaCon
 
 	if err := executeTemplate(
 		path.Join(pathToApp, "env.tmpl"),
-		path.Join(pathToInst, "env"),
+		path.Join(pathToInst, ".env"),
 		&config,
 	); err != nil {
 		return "", err

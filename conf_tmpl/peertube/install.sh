@@ -3,24 +3,25 @@
 set -voeu pipefail
 
 set -a
-source ./env
+source ./.env
 set +a
 
 printf "[DCOMMS State] Generating Peertube config\n"
 
 PEERTUBE_SECRET=$(openssl rand -hex 32)
 
-printf "PEERTUBE_SECRET=$PEERTUBE_SECRET" >> env
+printf "PEERTUBE_SECRET=$PEERTUBE_SECRET" >> .env
 
 printf "[DCOMMS State] Starting peertube app\n"
 
-docker compose up -d
+docker compose up --wait
 
 printf "[DCOMMS State] Performing peertube post-install\n"
 
-# TODO: debug that, something broke
-
 printf "[DCOMMS State] Configuring SSO\n"
+
+# FIXME: we need to pass that and store that
+HTTP_PORT=8000
 
 docker compose exec -T -u peertube peertube-back \
   npm run plugin:install -- \
@@ -28,14 +29,14 @@ docker compose exec -T -u peertube peertube-back \
 docker compose restart peertube-back
 
 client_json=$(curl -fsS \
-  "$PEERTUBE_WEBSERVER_HOSTNAME/api/v1/oauth-clients/local")
+  "$PEERTUBE_WEBSERVER_HOSTNAME:$HTTP_PORT/api/v1/oauth-clients/local")
 
 client_id=$(jq -er '.client_id // empty' <<< "$client_json")
 client_secret=$(jq -er '.client_secret // empty' <<< "$client_json")
 
 # Pass the password through stdin.
 token_json=$(
-  printf '%s' "$PT_INITIAL_ROOT_PASSWORD" \
+  printf '%s' "$PT_INITIAL_ROOT_PASSWORD" |
     curl -fsS "$base_url/api/v1/users/token" \
       --data-urlencode "client_id=$client_id" \
       --data-urlencode "client_secret=$client_secret" \
@@ -50,7 +51,7 @@ PEERTUBE_ADMIN_TOKEN=$(jq -er '.access_token // empty' <<< "$token_json")
 curl -fsS -X PUT \
   -H "Authorization: Bearer $PEERTUBE_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  "$PEERTUBE_WEBSERVER_HOSTNAME/api/v1/plugins/peertube-plugin-auth-openid-connect/settings" \
+  "$PEERTUBE_WEBSERVER_HOSTNAME:$HTTP_PORT/api/v1/plugins/peertube-plugin-auth-openid-connect/settings" \
   --data '{
     "settings": {
       "client-id": "$AUTH_CLIENT_ID",
