@@ -17,7 +17,7 @@
               "handler": "reverse_proxy",
               "upstreams": [
                 {
-                  "dial": "peertube:{{ .PortWebUI }}"
+                  "dial": "peertube:9000"
                 }
               ]
             }
