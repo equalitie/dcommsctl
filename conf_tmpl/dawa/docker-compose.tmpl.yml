@@ -20,11 +20,11 @@ services:
     volumes:
       - dawa_storage:/rails/storage
     networks:
-      dawa:
+      proxy:
         aliases:
           - dawa-ext
       metrics: {}
-      proxy: {}
+      dawa: {}
     deploy:
       resources:
         limits:
