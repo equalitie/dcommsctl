@@ -40,7 +40,7 @@ func (app *GlobalState) rpcInstanceExpose(ctx context.Context, args InstanceExpo
 	caddyRouteJSON, err := os.ReadFile(caddyRouteFilePath)
 
 	endpoint := "http://localhost:2019/config/apps/http/servers/srv0/routes"
-	if _, err := caddySendRequest(ctx, endpoint, http.MethodPost, caddyRouteJSON); err != nil {
+	if _, _, err := caddySendRequest(ctx, endpoint, http.MethodPost, "", caddyRouteJSON); err != nil {
 		return InstanceExposeResult{}, err
 	}
 

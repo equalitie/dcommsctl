@@ -30,6 +30,7 @@ type SystemConfig struct {
 
 type InstanceGenericConfig struct {
 	SSOIssuerURI string
+	InstanceID   string
 	ClientID     string
 	ClientSecret string
 	Domain       string

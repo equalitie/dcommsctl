@@ -24,7 +24,7 @@
               "handler": "reverse_proxy",
               "upstreams": [
                 {
-                  "dial": "dawa:3000"
+                  "dial": "dawa-ext:3000"
                 }
               ],
               "headers": {
@@ -46,7 +46,7 @@
               "handler": "reverse_proxy",
               "upstreams": [
                 {
-                  "dial": "dawa:3000"
+                  "dial": "dawa-ext:3000"
                 }
               ],
               "headers": {

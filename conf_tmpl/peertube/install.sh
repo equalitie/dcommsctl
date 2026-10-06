@@ -85,7 +85,5 @@ docker compose exec peertube-back curl -fsS -X PUT \
     }
   }'
 
-docker compose down
-
 printf "[DCOMMS State] Peertube SSO configuration done\n"
 

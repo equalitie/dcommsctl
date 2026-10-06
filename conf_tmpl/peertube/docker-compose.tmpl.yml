@@ -8,6 +8,8 @@ networks:
   peertube-int:
   peertube:
     internal: true
+  proxy:
+    external: true
 
 services:
   peertube-back:
@@ -25,8 +27,11 @@ services:
       - peertube-postgres
       - peertube-redis
     networks:
-      - peertube-int
-      - peertube
+      proxy:
+          aliases:
+              - {{ .InstanceID }}
+      peertube-int: {}
+      peertube: {}
     restart: "always"
 
   peertube-postgres:

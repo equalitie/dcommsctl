@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"text/template"
 	"time"
 )
@@ -53,7 +54,7 @@ func caddyInstancePath(instancesDir string) (string, error) {
 	return pathToInst, nil
 }
 
-func caddySendRequest(ctx context.Context, endpoint string, method string, payloadJSON []byte) ([]byte, error) {
+func caddySendRequest(ctx context.Context, endpoint, method, etag string, payloadJSON []byte) ([]byte, string, error) {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		method,
@@ -61,22 +62,25 @@ func caddySendRequest(ctx context.Context, endpoint string, method string, paylo
 		bytes.NewReader(payloadJSON),
 	)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
+	if etag != "" {
+		req.Header.Set("If-Match", etag)
+	}
 	req.Header.Add("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 4 * time.Second}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// Caddy's reply body; a non-2xx status is worth seeing here since the caller only
@@ -85,9 +89,9 @@ func caddySendRequest(ctx context.Context, endpoint string, method string, paylo
 		"endpoint", endpoint, "status", resp.StatusCode)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return body, fmt.Errorf("Caddy returned %s: %s", resp.Status, body)
+		return body, "", fmt.Errorf("Caddy returned %s: %s", resp.Status, body)
 	}
-	return body, nil
+	return body, resp.Header.Get("ETag"), nil
 }
 
 func caddyAddRoute(ctx context.Context, instanceName, hostname, upstreamAddress string) error {
@@ -115,7 +119,7 @@ func caddyAddRoute(ctx context.Context, instanceName, hostname, upstreamAddress 
 		return err
 	}
 
-	if _, err := caddySendRequest(ctx, endpoint, http.MethodPost, payloadJSON); err != nil {
+	if _, _, err := caddySendRequest(ctx, endpoint, http.MethodPost, "", payloadJSON); err != nil {
 		return err
 	}
 
@@ -134,7 +138,7 @@ func caddyDropRoute(ctx context.Context, instanceName string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := caddySendRequest(ctx, endpoint, http.MethodDelete, payloadJSON); err != nil {
+	if _, _, err := caddySendRequest(ctx, endpoint, http.MethodDelete, "", payloadJSON); err != nil {
 		return err
 	}
 
@@ -207,7 +211,7 @@ func caddyExportConfig(ctx context.Context, instancesDir string) error {
 
 	destination := path.Join(caddyInstanceDir, "config.json")
 	endpoint := "http://localhost:2019/config/"
-	data, err := caddySendRequest(ctx, endpoint, http.MethodGet, nil)
+	data, _, err := caddySendRequest(ctx, endpoint, http.MethodGet, "", nil)
 	if err != nil {
 		return err
 	}
@@ -238,4 +242,139 @@ func caddyExportConfig(ctx context.Context, instancesDir string) error {
 	}
 
 	return nil
+}
+
+func caddyEnsureTLS(
+	ctx context.Context,
+	hostname, admin string,
+) error {
+	admin = strings.TrimRight(admin, "/")
+
+	for attempt := 0; attempt < 5; attempt++ {
+		body, etag, err := caddySendRequest(
+			ctx, admin+"/config/apps",
+			http.MethodGet, "", nil,
+		)
+		if err != nil {
+			return err
+		}
+		if etag == "" {
+			return fmt.Errorf("Caddy response has no ETag")
+		}
+
+		var apps struct {
+			TLS map[string]any `json:"tls"`
+		}
+		decoder := json.NewDecoder(bytes.NewReader(body))
+		decoder.UseNumber()
+		if err := decoder.Decode(&apps); err != nil {
+			return err
+		}
+
+		tls := apps.TLS
+		if tls == nil {
+			tls = make(map[string]any)
+		}
+		before, err := json.Marshal(tls)
+		if err != nil {
+			return err
+		}
+
+		certificates, err := ensureObject(tls, "certificates")
+		if err != nil {
+			return err
+		}
+
+		var names []string
+		if err := decodeValue(certificates["automate"], &names); err != nil {
+			return fmt.Errorf("certificates.automate: %w", err)
+		}
+
+		seen := make(map[string]bool)
+		unique := make([]string, 0, len(names)+1)
+		for _, name := range append(names, hostname) {
+			if !seen[name] {
+				seen[name] = true
+				unique = append(unique, name)
+			}
+		}
+		certificates["automate"] = unique
+
+		automation, err := ensureObject(tls, "automation")
+		if err != nil {
+			return err
+		}
+
+		var policies []map[string]any
+		if err := decodeValue(automation["policies"], &policies); err != nil {
+			return fmt.Errorf("automation.policies: %w", err)
+		}
+
+		covered := false
+		for _, policy := range policies {
+			var subjects []string
+			if err := decodeValue(policy["subjects"], &subjects); err != nil {
+				return fmt.Errorf("policy subjects: %w", err)
+			}
+			for _, subject := range subjects {
+				if subject == hostname {
+					covered = true
+				}
+			}
+		}
+
+		if !covered {
+			policy := map[string]any{
+				"subjects": []string{hostname},
+				"issuers": []map[string]string{
+					{"module": "internal"},
+				},
+			}
+			policies = append([]map[string]any{policy}, policies...)
+		}
+		automation["policies"] = policies
+
+		after, err := json.Marshal(tls)
+		if err != nil {
+			return err
+		}
+		if bytes.Equal(before, after) {
+			return nil
+		}
+
+		body, _, err = caddySendRequest(
+			ctx, admin+"/config/apps/tls",
+			http.MethodPost, etag, after,
+		)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	return fmt.Errorf("Caddy config kept changing; retry later")
+}
+
+func ensureObject(parent map[string]any, key string) (map[string]any, error) {
+	if parent[key] == nil {
+		parent[key] = make(map[string]any)
+	}
+	obj, ok := parent[key].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s must be a JSON object", key)
+	}
+	return obj, nil
+}
+
+func decodeValue(value any, target any) error {
+	if value == nil {
+		return nil
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	return decoder.Decode(target)
 }

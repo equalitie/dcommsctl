@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"path/filepath"
 )
 
 type AdminConfig struct {
@@ -36,6 +37,10 @@ func peertubeCreateInstance(ctx context.Context, instancesDir string, config Pee
 	if err != nil {
 		return "", err
 	}
+
+	instanceID := filepath.Base(pathToInst)
+
+	config.InstanceID = instanceID
 
 	if err := executeTemplate(
 		path.Join(pathToApp, "docker-compose.tmpl.yml"),

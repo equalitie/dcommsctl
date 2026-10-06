@@ -17,7 +17,7 @@
               "handler": "reverse_proxy",
               "upstreams": [
                 {
-                  "dial": "peertube:9000"
+                  "dial": "{{ .InstanceID }}:9000"
                 }
               ]
             }

@@ -84,7 +84,7 @@ func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaCon
 	}
 
 	endpoint := "http://localhost:2019/config/apps/http/servers/srv0/routes"
-	if _, err := caddySendRequest(ctx, endpoint, http.MethodPost, caddyRouteJSON); err != nil {
+	if _, _, err := caddySendRequest(ctx, endpoint, http.MethodPost, "", caddyRouteJSON); err != nil {
 		return "", err
 	}
 

@@ -1,5 +1,6 @@
 networks:
-  caddy:
+  proxy:
+    external: true
 volumes:
   caddy_data:
   caddy_config:
@@ -13,7 +14,7 @@ services:
         source: ./www
         target: /www
     networks:
-      - caddy
+      - proxy
     ports:
       - target: 80
         published: {{ .Port }}
