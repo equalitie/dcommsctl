@@ -22,10 +22,10 @@ func (app *GlobalState) rpcInstanceRestore(ctx context.Context, args InstanceRes
 
 	instanceID := args.InstanceName
 
-	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
-	lockFilePath := path.Join(instanceDir, ".job.lock")
+	pathToInst := path.Join(app.systemCfg.InstancesDir, instanceID)
+	lockFilePath := path.Join(pathToInst, ".job.lock")
 
-	if err := jobTryToLockFile(path.Join(instanceDir, lockFilePath)); err != nil {
+	if err := jobTryToLockFile(lockFilePath); err != nil {
 		return InstanceRestoreResult{}, fmt.Errorf("The job is in progress")
 	}
 
@@ -37,11 +37,11 @@ func (app *GlobalState) rpcInstanceRestore(ctx context.Context, args InstanceRes
 	}
 
 	cmd := exec.CommandContext(app.jobsManager.ctx, path.Join("conf_tmpl", "peertube", "restore.sh"))
-	cmd.Dir = instanceDir
+	cmd.Dir = pathToInst
 	cmd.Env = []string{
 		"BACKUP_ROOT=" + backupRoot,
 		"BACKUP_ID=" + backupID,
-		"APP_DIR=" + instanceDir,
+		"APP_DIR=" + pathToInst,
 	}
 	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
 		return InstanceRestoreResult{}, err

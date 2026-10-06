@@ -23,10 +23,10 @@ func (app *GlobalState) rpcInstanceBackup(ctx context.Context, args InstanceBack
 
 	instanceID := args.InstanceName
 
-	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
-	lockFilePath := path.Join(instanceDir, ".job.lock")
+	pathToInst := path.Join(app.systemCfg.InstancesDir, instanceID)
+	lockFilePath := path.Join(pathToInst, ".job.lock")
 
-	instanceDirParts := strings.Split(path.Base(instanceDir), "-")
+	instanceDirParts := strings.Split(path.Base(pathToInst), "-")
 
 	appName := instanceDirParts[0]
 	pathToAppConfig := path.Join(app.systemCfg.AppsDir, appName, "config.json")
@@ -36,7 +36,7 @@ func (app *GlobalState) rpcInstanceBackup(ctx context.Context, args InstanceBack
 		return InstanceBackupResult{}, fmt.Errorf("Application %s is not supported", appName)
 	}
 
-	if err := jobTryToLockFile(path.Join(instanceDir, lockFilePath)); err != nil {
+	if err := jobTryToLockFile(lockFilePath); err != nil {
 		return InstanceBackupResult{}, fmt.Errorf("The job is in progress")
 	}
 
@@ -48,11 +48,11 @@ func (app *GlobalState) rpcInstanceBackup(ctx context.Context, args InstanceBack
 	}
 
 	cmd := exec.CommandContext(app.jobsManager.ctx, path.Join(app.systemCfg.AppsDir, appName, "backup.sh"))
-	cmd.Dir = instanceDir
+	cmd.Dir = pathToInst
 	cmd.Env = []string{
 		"BACKUP_ROOT=" + backupRoot,
 		"BACKUP_ID=" + backupID,
-		"APP_DIR=" + instanceDir,
+		"APP_DIR=" + pathToInst,
 	}
 	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
 		return InstanceBackupResult{}, err
