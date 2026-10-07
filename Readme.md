@@ -25,7 +25,7 @@ This is far from complete. Look at the `rpc_*.go` files for arguments and return
 
 # Helper scripts
 
-`cleanup.sh` - stops all services running from `.instances` folder and removes the folder after
+`scripts/cleanup.sh` - stops all services running from `.instances` folder and removes the folder after
 
 # Logging
 
