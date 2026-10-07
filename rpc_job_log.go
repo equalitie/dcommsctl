@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 )
 
 type JobLogArgs struct {
@@ -14,7 +13,6 @@ type JobLogResult struct {
 	Log string `json:"log"`
 	// NextOffset is the cursor to pass on the next read.
 	NextOffset int64 `json:"next_offset"`
-
 	// Done:
 	//
 	// True means the job has ended and this reply reaches the end of its output,
@@ -27,11 +25,6 @@ type JobLogResult struct {
 
 func (app *GlobalState) rpcJobLog(ctx context.Context, args JobLogArgs) (JobLogResult, error) {
 	r := JobLogResult{}
-
-	_, found := app.jobsManager.instanceIDForJob(args.JobID)
-	if !found {
-		return JobLogResult{}, fmt.Errorf("unknown instance for job: %s", args.JobID)
-	}
 
 	l, err := app.jobsManager.fetchLog(args.JobID, args.Offset)
 	if err != nil {

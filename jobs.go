@@ -60,13 +60,10 @@ type JobManager struct {
 	jobsPath string
 }
 
-// `LogChunk` is the raw log data
-// `NextOffset` is the cursor to pass to the next read.
-// `Finished` reports that the log is COMPLETE (reaching the end doesn't mean the job is done).
 type JobLogChunk struct {
-	LogChunk   []byte
-	NextOffset int64
-	Finished   bool
+	LogChunk   []byte // the raw log data
+	NextOffset int64  // the cursor to pass to the next read.
+	Finished   bool   // reports that the job is finished and therefore log is COMPLETE
 }
 
 const maxLogChunk = 64 * 1024
@@ -93,8 +90,6 @@ func jobKey(instanceID, jobID string) string {
 	return instanceID + "-" + jobID
 }
 
-// Expected when another job of the same type is already running: the lock file
-// exists, so O_EXCL fails.
 func jobTryToLockFile(lockPath string) error {
 	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
@@ -151,20 +146,6 @@ func (m *JobManager) statusByID(id string) (JobStatus, bool) {
 	}
 
 	return JobStatus{}, false
-}
-
-// Resolves which instance a job belongs to from its bare id.
-func (m *JobManager) instanceIDForJob(id string) (string, bool) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	for _, rec := range m.jobs {
-		if rec.Status.ID == id {
-			return rec.Status.InstanceID, true
-		}
-	}
-
-	return "", false
 }
 
 func (m *JobManager) fetchLog(id string, offset int64) (JobLogChunk, error) {
