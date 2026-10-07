@@ -8,13 +8,6 @@ import (
 	"path"
 )
 
-// Installable applications, in catalog order. Also the allowlist for apps/get.
-var appIDs = []string{
-	"peertube",
-	"mastodon",
-	"dawa",
-}
-
 // One published version. Hand-maintained in each config.json; only Version is required.
 type Release struct {
 	Version    string `json:"version"`

@@ -191,6 +191,13 @@ func (app *GlobalState) initApps(ctx context.Context) error {
 	return nil
 }
 
+// Installable applications, in catalog order. Also the allowlist for apps/get.
+var appIDs = []string{
+	"peertube",
+	"mastodon",
+	"dawa",
+}
+
 func main() {
 	initLogging()
 

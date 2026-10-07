@@ -54,7 +54,7 @@ func instanceDomain(instanceDir, appName string) string {
 		return ""
 	}
 
-	env, err := godotenv.Read(path.Join(instanceDir, "env"))
+	env, err := godotenv.Read(path.Join(instanceDir, ".env"))
 	if err != nil {
 		return ""
 	}
