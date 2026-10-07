@@ -101,11 +101,11 @@ func instanceStatus(ctx context.Context, instanceDir string) string {
 }
 
 func (app *GlobalState) rpcInstancesList(ctx context.Context, args InstancesListArgs) (InstancesListResult, error) {
-	r := InstancesListResult{}
+	r := InstancesListResult{Instances: []InstanceInfo{}}
 
 	entries, err := os.ReadDir(app.systemCfg.InstancesDir)
 	if err != nil {
-		return InstancesListResult{}, err
+		return r, err
 	}
 
 	for _, entry := range entries {

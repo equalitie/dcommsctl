@@ -14,7 +14,7 @@ type JobsListResult struct {
 func (app *GlobalState) rpcJobsList(ctx context.Context, args JobsListArgs) (JobsListResult, error) {
 	instanceID := args.InstanceID
 	filterByInstance := instanceID != ""
-	r := JobsListResult{}
+	r := JobsListResult{Jobs: []JobStatus{}}
 	for _, j := range app.jobsManager.jobs {
 		if filterByInstance {
 			if j.Status.InstanceID != instanceID {
