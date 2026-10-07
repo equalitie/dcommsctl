@@ -1,4 +1,7 @@
-$root = "./.instances"
+#!/bin/bash
+DCOMMS_DATA="${DCOMMS_DATA:-$PWD}"
+
+root="$DCOMMS_DATA/.instances"
 
 set -uo pipefail
 
@@ -11,7 +14,6 @@ done
 docker compose version >/dev/null || exit 1
 docker info >/dev/null || exit 1
 
-root=$(cd -- "./.instances" && pwd -P) || exit 1
 shopt -s nullglob dotglob
 failed=0
 found=0
