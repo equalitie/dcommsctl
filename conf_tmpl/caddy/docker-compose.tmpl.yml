@@ -19,19 +19,15 @@ services:
       - target: 80
         published: {{ .Port }}
         protocol: tcp
-        mode: host
       - target: 443
         published: 3443
         protocol: tcp
-        mode: host
       - target: 8448
         published: 8448
         protocol: tcp
-        mode: host
       - target: 2019
         published: 2019
         protocol: tcp
-        mode: host
     configs:
       - source: caddy-caddyfile-config
         target: /etc/caddy/Caddyfile

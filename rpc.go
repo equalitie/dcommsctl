@@ -181,7 +181,7 @@ func parseJSONTag(tag string) (string, map[string]bool) {
 	return parts[0], options
 }
 
-func (r *registry) Specs() []rpcMethodSpec {
+func (r *registry) SaveSpecs(filename string) error {
 	specs := make([]rpcMethodSpec, 0, len(r.methods))
 
 	for name, method := range r.methods {
@@ -201,11 +201,7 @@ func (r *registry) Specs() []rpcMethodSpec {
 		return specs[i].Name < specs[j].Name
 	})
 
-	return specs
-}
-
-func (r *registry) SaveSpecs(filename string) error {
-	data, err := json.MarshalIndent(r.Specs(), "", "  ")
+	data, err := json.MarshalIndent(specs, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -284,7 +280,6 @@ func NewJRPCServer() *Server {
 //	func(ctx context.Context) (R, error)
 //
 // The context is optional. Only used for server-sent messages
-
 func (s *Server) Register(name string, fn any) { s.reg.register(name, fn) }
 
 func (s *Server) Handler() http.Handler { return s }

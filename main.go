@@ -174,7 +174,7 @@ func (app *GlobalState) pollJobStatus(ctx context.Context, jobID string) error {
 }
 
 func (app *GlobalState) initApps(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "./docker_setup.sh")
+	cmd := exec.CommandContext(ctx, "./scripts/docker_setup.sh")
 
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("containers setup failed %s: %s", err, out)
