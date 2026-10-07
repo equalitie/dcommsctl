@@ -22,6 +22,7 @@ import (
 const scriptGracePeriod = 20 * time.Second
 
 type SystemConfig struct {
+	DomainName   string
 	SSODomain    string
 	BaseDataPath string
 	AppsDir      string
@@ -154,7 +155,7 @@ func (app *GlobalState) initApps(ctx context.Context) error {
 
 	if _, err := app.rpcInstanceInstall(ctx, InstanceInstallArgs{
 		AppName:    "caddy",
-		DomainName: "localhost",
+		DomainName: app.systemCfg.DomainName,
 	}); err != nil {
 		return err
 	}
@@ -178,7 +179,7 @@ func (app *GlobalState) initApps(ctx context.Context) error {
 	} else {
 		dawaResult, err := app.rpcInstanceInstall(ctx, InstanceInstallArgs{
 			AppName:    "dawa",
-			DomainName: "dawa.localhost",
+			DomainName: "dawa." + app.systemCfg.DomainName,
 		})
 		if err != nil {
 			return err
@@ -201,8 +202,6 @@ var appIDs = []string{
 func main() {
 	initLogging()
 
-	serverError := make(chan error, 1)
-
 	rootContext, stop := signal.NotifyContext(
 		context.Background(),
 		os.Interrupt,
@@ -214,7 +213,14 @@ func main() {
 	baseDataPath := flag.String("path", ".", "Path to store all the data (instances, backups, job database)")
 	flag.Parse()
 
+	webDomain := os.Getenv("DCOMMS_WEB_DOMAIN")
+
+	if webDomain == "" {
+		webDomain = "localhost"
+	}
+
 	app := NewGlobalState(rootContext)
+	app.systemCfg.DomainName = webDomain
 	app.systemCfg.SkipDawa = *skipDawa
 	app.systemCfg.BaseDataPath, _ = filepath.Abs(*baseDataPath)
 	app.systemCfg.InstancesDir = filepath.Join(app.systemCfg.BaseDataPath, "./.instances")
@@ -268,7 +274,7 @@ func main() {
 	addr := os.Getenv("WEBHOST_PORT")
 
 	if addr == "" {
-		addr = ":6006"
+		addr = "0.0.0.0:6006"
 	}
 
 	server := &http.Server{
@@ -283,12 +289,14 @@ func main() {
 	// Bind explicitly rather than letting ListenAndServe do it, so the address we
 	// actually got (port 0 or a taken port would otherwise be guesswork) can be
 	// logged before serving starts.
-	listener, err := net.Listen("tcp", addr)
+	listener, err := net.Listen("tcp4", addr)
 	if err != nil {
 		logFatal("cannot listen", "address", addr, "err", err)
 	}
 
 	logInfo("listening", "address", listener.Addr().String(), "ws_endpoint", listener.Addr().String()+"/ws")
+
+	serverError := make(chan error, 1)
 
 	go func() {
 		if err := server.Serve(listener); !errors.Is(err, http.ErrServerClosed) {
