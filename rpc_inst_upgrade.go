@@ -15,8 +15,7 @@ type InstanceUpgradeResult struct {
 }
 
 func (app *GlobalState) rpcInstanceUpgrade(ctx context.Context, args InstanceUpgradeArgs) (InstanceUpgradeResult, error) {
-	jobType := "upgrade"
-	jobID := jobID(jobType)
+	// jobType := "upgrade"
 
 	instanceID := args.InstanceName
 
@@ -28,6 +27,6 @@ func (app *GlobalState) rpcInstanceUpgrade(ctx context.Context, args InstanceUpg
 	}
 
 	return InstanceUpgradeResult{
-		JobID: jobID,
-	}, nil
+		JobID: "", // jobID,
+	}, fmt.Errorf("job unimplemented")
 }

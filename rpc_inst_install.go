@@ -36,8 +36,6 @@ func randomID() (string, error) {
 func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstanceInstallArgs) (InstanceInstallResult, error) {
 	applicationID := args.AppName
 	jobType := "install"
-	jobID := jobID(jobType)
-
 	clientID, _ := randomID()
 	clientSecret, _ := randomID()
 
@@ -92,7 +90,8 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstanceIns
 				"VERSION=" + config.Version,
 			}
 
-			if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
+			jobID, err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, cmd)
+			if err != nil {
 				return InstanceInstallResult{}, err
 			}
 
@@ -141,7 +140,8 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstanceIns
 				"OAUTH_CLIENT_SECRET=" + clientSecret,
 			}
 
-			if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
+			jobID, err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, cmd)
+			if err != nil {
 				return InstanceInstallResult{}, err
 			}
 
@@ -179,7 +179,8 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstanceIns
 				"APP_DIR=" + instanceDir,
 			}
 
-			if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
+			jobID, err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, cmd)
+			if err != nil {
 				return InstanceInstallResult{}, err
 			}
 

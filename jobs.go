@@ -70,7 +70,7 @@ const maxLogChunk = 64 * 1024
 
 var jobCounter atomic.Uint64
 
-func jobID(jobType string) string {
+func makeJobID(jobType string) string {
 	return fmt.Sprintf(
 		"%s-%s-%d",
 		jobType,
@@ -231,11 +231,12 @@ func (m *JobManager) update(instanceID, id string, fn func(rec *JobRecord)) bool
 	return true
 }
 
-func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jobType, jobID string, cmd *exec.Cmd) error {
+func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jobType string, cmd *exec.Cmd) (jobID string, err error) {
+	jobID = makeJobID(jobType)
 	logFilePath := filepath.Join(cmd.Dir, "jobs", jobID+".log")
 	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	wout := io.MultiWriter(logFile, os.Stdout)
@@ -247,7 +248,7 @@ func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jo
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	cmd.Cancel = func() error {
-		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+		err = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 		if errors.Is(err, syscall.ESRCH) {
 			return os.ErrProcessDone
 		}
@@ -260,7 +261,7 @@ func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jo
 		if err := os.Remove(lockFilePath); err != nil {
 			logError("Failed to remove lock file after Start", "err", err)
 		}
-		return err
+		return "", err
 	}
 
 	rec := &JobRecord{
@@ -284,7 +285,7 @@ func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jo
 		if err := os.Remove(lockFilePath); err != nil {
 			logError("Failed to remove lock file after dumpjobs", "err", err)
 		}
-		return err
+		return "", err
 	}
 
 	go func() {
@@ -314,7 +315,7 @@ func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jo
 		}
 	}()
 
-	return nil
+	return jobID, nil
 }
 
 // Job state is persisted as a single JSON file: a map from key(instanceID, id) to a record. It

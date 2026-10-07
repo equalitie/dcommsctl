@@ -17,7 +17,6 @@ type InstanceStopResult struct {
 
 func (app *GlobalState) rpcInstanceStop(ctx context.Context, args InstanceStopArgs) (InstanceStopResult, error) {
 	jobType := "stop"
-	jobID := jobID(jobType)
 
 	instanceID := args.InstanceID
 
@@ -29,10 +28,11 @@ func (app *GlobalState) rpcInstanceStop(ctx context.Context, args InstanceStopAr
 	}
 
 	cmdArgs := []string{"compose", "down"}
-
 	cmd := exec.CommandContext(app.jobsManager.ctx, "docker", cmdArgs...)
 	cmd.Dir = pathToInst
-	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
+
+	jobID, err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, cmd)
+	if err != nil {
 		return InstanceStopResult{}, err
 	}
 

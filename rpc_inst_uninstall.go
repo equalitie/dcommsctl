@@ -17,7 +17,7 @@ type InstanceUninstallResult struct {
 func (app *GlobalState) rpcInstanceUninstall(ctx context.Context, args InstanceUninstallArgs) (InstanceUninstallResult, error) {
 	jobType := "uninstall"
 
-	jobID := jobID(jobType)
+	jobID := makeJobID(jobType)
 
 	instanceID := args.ID
 
@@ -33,7 +33,8 @@ func (app *GlobalState) rpcInstanceUninstall(ctx context.Context, args InstanceU
 	cmd := exec.CommandContext(app.jobsManager.ctx, "docker", cmdArgs...)
 	cmd.Dir = instanceDir
 
-	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
+	jobID, err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, cmd)
+	if err != nil {
 		return InstanceUninstallResult{}, err
 	}
 

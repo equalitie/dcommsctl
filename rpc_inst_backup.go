@@ -19,7 +19,6 @@ type InstanceBackupResult struct {
 
 func (app *GlobalState) rpcInstanceBackup(ctx context.Context, args InstanceBackupArgs) (InstanceBackupResult, error) {
 	jobType := "backup"
-	jobID := jobID(jobType)
 
 	instanceID := args.InstanceName
 
@@ -54,7 +53,9 @@ func (app *GlobalState) rpcInstanceBackup(ctx context.Context, args InstanceBack
 		"BACKUP_ID=" + backupID,
 		"APP_DIR=" + pathToInst,
 	}
-	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
+
+	jobID, err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, cmd)
+	if err != nil {
 		return InstanceBackupResult{}, err
 	}
 

@@ -18,7 +18,7 @@ type InstanceRestoreResult struct {
 
 func (app *GlobalState) rpcInstanceRestore(ctx context.Context, args InstanceRestoreArgs) (InstanceRestoreResult, error) {
 	jobType := "restore"
-	jobID := jobID(jobType)
+	jobID := makeJobID(jobType)
 
 	instanceID := args.InstanceName
 
@@ -43,7 +43,9 @@ func (app *GlobalState) rpcInstanceRestore(ctx context.Context, args InstanceRes
 		"BACKUP_ID=" + backupID,
 		"APP_DIR=" + pathToInst,
 	}
-	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
+
+	jobID, err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, cmd)
+	if err != nil {
 		return InstanceRestoreResult{}, err
 	}
 

@@ -18,8 +18,6 @@ type InstanceStartResult struct {
 func (app *GlobalState) rpcInstanceStart(ctx context.Context, args InstanceStartArgs) (InstanceStartResult, error) {
 	jobType := "start"
 
-	jobID := jobID(jobType)
-
 	instanceID := args.InstanceID
 	if instanceID == "" {
 		return InstanceStartResult{}, fmt.Errorf("No instance specified")
@@ -37,7 +35,8 @@ func (app *GlobalState) rpcInstanceStart(ctx context.Context, args InstanceStart
 	cmd := exec.CommandContext(app.jobsManager.ctx, "docker", cmdArgs...)
 	cmd.Dir = pathToInst
 
-	if err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, jobID, cmd); err != nil {
+	jobID, err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, cmd)
+	if err != nil {
 		return InstanceStartResult{}, err
 	}
 
