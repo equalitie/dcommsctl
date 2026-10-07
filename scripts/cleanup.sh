@@ -5,12 +5,6 @@ root="$DCOMMS_DATA/.instances"
 
 set -uo pipefail
 
-for tool in docker jq; do
-    command -v "$tool" >/dev/null || {
-        printf 'Missing required command: %s\n' "$tool" >&2
-        exit 1
-    }
-done
 docker compose version >/dev/null || exit 1
 docker info >/dev/null || exit 1
 
