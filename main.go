@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
@@ -22,9 +23,11 @@ const scriptGracePeriod = 20 * time.Second
 
 type SystemConfig struct {
 	SSODomain    string
+	BaseDataPath string
 	AppsDir      string
 	InstancesDir string
 	BackupsDir   string
+	SkipDawa     bool
 }
 
 type InstanceGenericConfig struct {
@@ -168,17 +171,21 @@ func (app *GlobalState) initApps(ctx context.Context) error {
 	}
 
 	// FIXME: get the actual port
-	logInfo("Caddy should be running on port :8000")
+	logInfo("Caddy should be running on port :8000 SSL on port :3443")
 
-	dawaResult, err := app.rpcInstanceInstall(ctx, InstanceInstallArgs{
-		AppName:    "dawa",
-		DomainName: "dawa.localhost",
-	})
-	if err != nil {
-		return err
-	}
-	if err := app.pollJobStatus(ctx, dawaResult.JobID); err != nil {
-		return err
+	if app.systemCfg.SkipDawa {
+		logInfo("Skipping Dawa initial install")
+	} else {
+		dawaResult, err := app.rpcInstanceInstall(ctx, InstanceInstallArgs{
+			AppName:    "dawa",
+			DomainName: "dawa.localhost",
+		})
+		if err != nil {
+			return err
+		}
+		if err := app.pollJobStatus(ctx, dawaResult.JobID); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -196,16 +203,19 @@ func main() {
 	)
 	defer stop()
 
+	skipDawa := flag.Bool("skip-dawa", false, "Skip initial Dawa installation")
+	baseDataPath := flag.String("path", ".", "Path to store all the data (instances, backups, job database)")
+	flag.Parse()
+
 	app := NewGlobalState(rootContext)
+	app.systemCfg.SkipDawa = *skipDawa
+	app.systemCfg.BaseDataPath, _ = filepath.Abs(*baseDataPath)
+	app.systemCfg.InstancesDir = filepath.Join(app.systemCfg.BaseDataPath, "./.instances")
+	app.systemCfg.AppsDir = filepath.Join(app.systemCfg.BaseDataPath, "./conf_tmpl")
+	app.systemCfg.BackupsDir = filepath.Join(app.systemCfg.BaseDataPath, "./.backups")
+	app.jobsManager.jobsDBpath = filepath.Join(app.systemCfg.BaseDataPath, "./.jobs_db.json")
+	app.jobsManager.jobsPath = filepath.Join(app.systemCfg.BaseDataPath, "./.jobs")
 
-	app.jobsManager.jobsDBpath, _ = filepath.Abs("./.jobs_db.json")
-	app.jobsManager.jobsPath, _ = filepath.Abs("./.jobs")
-
-	app.systemCfg.InstancesDir, _ = filepath.Abs("./.instances")
-	app.systemCfg.AppsDir, _ = filepath.Abs("./conf_tmpl")
-	app.systemCfg.BackupsDir, _ = filepath.Abs("./.backups")
-
-	// TODO: debug this
 	if err := app.initApps(rootContext); err != nil {
 		panic(err)
 	}
