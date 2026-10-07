@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path"
-	// "github.com/compose-spec/compose-go/v2/cli"
 )
 
 type MastodonConfig struct {

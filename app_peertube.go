@@ -72,17 +72,3 @@ func peertubeCreateInstance(ctx context.Context, instancesDir string, config Pee
 
 	return pathToInst, nil
 }
-
-func peertubeEnable(ctx context.Context, instanceName string, config PeertubeConfig) error {
-	if err := caddyAddRoute(ctx, instanceName, fmt.Sprintf("%s:%d", config.Domain, config.PortRTMP), fmt.Sprintf("http://%s-peertube-back:%d", instanceName, config.PortRTMP)); err != nil {
-		return err
-	}
-	if err := caddyAddRoute(ctx, instanceName, config.Domain, fmt.Sprintf("http://%s-peertube-back:%d", instanceName, config.PortRTMP)); err != nil {
-		return err
-	}
-	return nil
-}
-
-func peertubeDisable(ctx context.Context, instanceName string) error {
-	return nil
-}
