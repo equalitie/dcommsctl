@@ -254,6 +254,8 @@ func main() {
 	jRPCServer.Register("inst/restore", app.rpcInstanceRestore)
 	jRPCServer.Register("inst/upgrade", app.rpcInstanceUpgrade)
 
+	jRPCServer.Register("backup/list", app.rpcBackupsList)
+
 	jRPCServer.Register("panic", app.rpcPanic)
 	// jRPCServer.Register("container/start", func() {})
 	// jRPCServer.Register("container/stop", func() {})

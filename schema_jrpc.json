@@ -69,6 +69,18 @@
     }
   },
   {
+    "name": "backup/list",
+    "params": {
+      "filter_by_app": "string"
+    },
+    "result": {
+      "backups": {
+        "items": "string",
+        "type": "array"
+      }
+    }
+  },
+  {
     "name": "inst/backup",
     "params": {
       "id": "string"
@@ -125,7 +137,8 @@
   {
     "name": "inst/restore",
     "params": {
-      "id": "string"
+      "backup_id": "string",
+      "instance_id": "string"
     },
     "result": {
       "job_id": "string"

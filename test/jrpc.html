@@ -11,8 +11,8 @@
       ws.onopen = () => {
         document.getElementById('result').textContent = 'connected';
 
-        getAllJobs();
-        getAllInstances();
+        setInterval(getAllJobs, 2000);
+        setInterval(getAllInstances, 2000);
       };
 
       ws.onmessage = (event) => {
@@ -32,6 +32,19 @@
             document.getElementById("job_log").innerText = data.result.log;
           }
 
+          if (data.result.backups) {
+
+            const s = document.getElementById("backup-id");
+
+            let opt = '';
+
+            for (const b of data.result.backups) {
+              opt += `<option value=${b}>${b}</option>`;
+
+            }
+            s.innerHTML = opt;
+          }
+
           if (data.result.jobs) {
 
             let html = '<table>';
@@ -47,7 +60,7 @@
           if (data.result.instances) {
             let html = '<table>';
             for (const inst of data.result.instances) {
-              html += `<tr><td>${inst.id}</td><td>${inst.app}</td><td>${inst.status}</td><td>${inst.version}</td><td><button onclick="sendStart('${inst.id}')">start</button><button onclick="sendStop('${inst.id}')">stop</button><button onclick="sendBackup('${inst.id}')">backup</button><button onclick="sendRestore('${inst.id}')">restore</button><button onclick="exposeInstance('${inst.id}')">expose</button></td></tr>`;
+              html += `<tr><td>${inst.id}</td><td>${inst.app}</td><td><a href="https://${inst.domain}:3443">${inst.domain}</a></td><td>${inst.status}</td><td>${inst.version}</td><td><button onclick="sendStart('${inst.id}')">start</button><button onclick="sendStop('${inst.id}')">stop</button><button onclick="sendBackup('${inst.id}')">backup</button><button onclick="initRestore('${inst.id}')">mark for restore</button><button onclick="exposeInstance('${inst.id}')">expose</button></td></tr>`;
             }
 
             html += '</table>';
@@ -56,7 +69,9 @@
           }
         }
 
-        document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+        if (!data.result.jobs && !data.result.instances) {
+          document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+        }
       };
 
       ws.onerror = (err) => {
@@ -103,9 +118,11 @@
       function sendInstall(e) {
         console.log(e);
         const name = e.currentTarget.dataset.name;
+
+        const domain = prompt(`Domain for the ${name} instance?`);
         send('inst/install', {
           name,
-          domain: `${name}.localhost`
+          domain,
         });
       }
 
@@ -133,9 +150,15 @@
         });
       }
 
-      function sendRestore(instanceId) {
+      function initRestore(instanceId) {
+        document.getElementById("instance_id").value = instanceId;
+
+      }
+
+      function sendRestore(instanceId, backupId) {
         send('inst/restore', {
-          id: instanceId
+          instance_id: instanceId,
+          backup_id: backupId
         });
       }
 
@@ -144,30 +167,44 @@
           id: instanceId
         });
       }
+
+      function getBackups(instanceId) {
+        send('backup/list', {});
+      }
     </script>
     <div>
-      <button data-name="peertube" onclick="sendInstall(event)">Install Peertube</button>
-      <button data-name="mastodon" onclick="sendInstall(event)">Install Mastodon</button>
-      <div>
-        <button onclick="getAllJobs()">Get jobs</button>
-        <div id="jobs"></div>
+      <div id="window-restore">
+        <div>
+          <label>Instance ID</label>
+          <input id="instance_id" type="text">
+        </div>
+        <div>
+          <button onClick="getBackups()">Get backups</button>
+          <select id="backup-id" /></select>
       </div>
       <div>
-        <button onclick="getAllInstances()">Get instances</button>
-        <div id="instances"></div>
-      </div>
-      <div>
-        <label>Instance ID</label>
-        <input id="instance_id" type="text">
-      </div>
-      <div>
-        <label>Job ID</label>
-        <input id="job_id" type="text">
-        <button onClick="checkJobStatus(document.getElementByID('job_id').value)">Check status</button>
-        <div id="job_result"></div>
+        <button onClick="sendRestore(document.getElementById('instance_id').value, document.getElementById('backup-id').value)">Restore</button>
       </div>
     </div>
-    <pre id="job_log"></pre>
-    <pre id="result"></pre>
-  </body>
+    <button data-name="peertube" onclick="sendInstall(event)">Install Peertube</button>
+    <button data-name="mastodon" onclick="sendInstall(event)">Install Mastodon</button>
+    <div>
+      <button onclick="getAllJobs()">Get jobs</button>
+      <div id="jobs"></div>
+    </div>
+    <div>
+      <button onclick="getAllInstances()">Get instances</button>
+      <div id="instances"></div>
+    </div>
+    <div></div>
+    <div>
+      <label>Job ID</label>
+      <input id="job_id" type="text">
+      <button onClick="checkJobStatus(document.getElementByID('job_id').value)">Check status</button>
+      <div id="job_result"></div>
+    </div>
+  </div>
+  <pre id="job_log"></pre>
+  <pre id="result"></pre>
+</body>
 </html>

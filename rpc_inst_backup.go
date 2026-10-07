@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"time"
 )
 
 type InstanceBackupArgs struct {
@@ -39,8 +40,8 @@ func (app *GlobalState) rpcInstanceBackup(ctx context.Context, args InstanceBack
 		return InstanceBackupResult{}, fmt.Errorf("The job is in progress")
 	}
 
-	backupID := instanceID
-	backupRoot := path.Join(app.systemCfg.BackupsDir, backupID)
+	backupID := fmt.Sprintf("%s-%s", instanceID, time.Now().UTC().Format("01-02.15:04:05"))
+	backupRoot := path.Join(app.systemCfg.BackupsDir, appName, instanceID)
 
 	if err := os.MkdirAll(backupRoot, 0o700); err != nil {
 		return InstanceBackupResult{}, err
@@ -51,7 +52,6 @@ func (app *GlobalState) rpcInstanceBackup(ctx context.Context, args InstanceBack
 	cmd.Env = []string{
 		"BACKUP_ROOT=" + backupRoot,
 		"BACKUP_ID=" + backupID,
-		"APP_DIR=" + pathToInst,
 	}
 
 	jobID, err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, cmd)
