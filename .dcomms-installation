@@ -1,2 +1,0 @@
-0.0.1
-docker-compose -f ./dcomms-docker-compose/conf/compose/docker-compose.yml
