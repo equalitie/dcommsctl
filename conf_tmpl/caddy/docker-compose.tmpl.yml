@@ -28,6 +28,7 @@ services:
       - target: 2019
         published: 2019
         protocol: tcp
+        host_ip: "127.0.0.1"
     configs:
       - source: caddy-caddyfile-config
         target: /etc/caddy/Caddyfile
