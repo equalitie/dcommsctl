@@ -42,7 +42,7 @@ func peertubeCreateInstance(ctx context.Context, instancesDir string, config Pee
 
 	config.InstanceID = instanceID
 
-	if err := executeTemplate(
+	if err := writeFileTemplate(
 		path.Join(pathToApp, "docker-compose.tmpl.yml"),
 		path.Join(pathToInst, "docker-compose.yml"),
 		&config,
@@ -50,7 +50,7 @@ func peertubeCreateInstance(ctx context.Context, instancesDir string, config Pee
 		return "", err
 	}
 
-	if err := executeTemplate(
+	if err := writeFileTemplate(
 		path.Join(pathToApp, "env.tmpl"),
 		path.Join(pathToInst, ".env"),
 		&config,
@@ -58,7 +58,7 @@ func peertubeCreateInstance(ctx context.Context, instancesDir string, config Pee
 		return "", err
 	}
 
-	if err := executeTemplate(
+	if err := writeFileTemplate(
 		path.Join(pathToApp, "caddy-route.tmpl.json"),
 		path.Join(pathToInst, "caddy-route.json"),
 		&config,

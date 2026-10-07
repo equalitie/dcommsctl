@@ -31,7 +31,7 @@ func mastodonCreateInstance(ctx context.Context, instancesDir string, config Mas
 		return "", err
 	}
 
-	if err := executeTemplate(
+	if err := writeFileTemplate(
 		path.Join(pathToApp, "docker-compose.tmpl.yml"),
 		path.Join(pathToInst, "docker-compose.yml"),
 		&config,
@@ -39,7 +39,7 @@ func mastodonCreateInstance(ctx context.Context, instancesDir string, config Mas
 		return "", err
 	}
 
-	if err := executeTemplate(
+	if err := writeFileTemplate(
 		path.Join(pathToApp, "env.tmpl"),
 		path.Join(pathToInst, ".env"),
 		&config,
@@ -47,7 +47,7 @@ func mastodonCreateInstance(ctx context.Context, instancesDir string, config Mas
 		return "", err
 	}
 
-	if err := executeTemplate(
+	if err := writeFileTemplate(
 		path.Join(pathToApp, "caddy-route.tmpl.json"),
 		path.Join(pathToInst, "caddy-route.json"),
 		&config,

@@ -53,7 +53,7 @@ func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaCon
 		}
 	}
 
-	if err := executeTemplate(
+	if err := writeFileTemplate(
 		path.Join(pathToApp, "docker-compose.tmpl.yml"),
 		path.Join(pathToInst, "docker-compose.yml"),
 		&config,
@@ -61,7 +61,7 @@ func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaCon
 		return "", err
 	}
 
-	if err := executeTemplate(
+	if err := writeFileTemplate(
 		path.Join(pathToApp, "env.tmpl"),
 		path.Join(pathToInst, ".env"),
 		&config,
@@ -70,7 +70,7 @@ func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaCon
 	}
 
 	caddyRouteFilePath := path.Join(pathToInst, "caddy-route.json")
-	if err := executeTemplate(
+	if err := writeFileTemplate(
 		path.Join(pathToApp, "caddy-route.tmpl.json"),
 		caddyRouteFilePath,
 		&config,

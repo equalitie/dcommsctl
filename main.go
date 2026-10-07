@@ -13,7 +13,6 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
-	"runtime/debug"
 	"syscall"
 	"text/template"
 	"time"
@@ -37,13 +36,6 @@ type InstanceGenericConfig struct {
 	OnionDomain  string
 	Version      string
 }
-
-type ContainerBackendType int
-
-const (
-	ContainerBackendDocker = iota
-	ContainerBackendPodman
-)
 
 type GlobalState struct {
 	ctx         context.Context
@@ -108,30 +100,7 @@ func portIsBindable(port int) bool {
 	return true
 }
 
-func crashLogInit() {
-	name := fmt.Sprintf(
-		"crash-%s-pid-%d.log",
-		time.Now().UTC().Format("20060102T150405Z"),
-		os.Getpid(),
-	)
-
-	f, err := os.OpenFile(
-		filepath.Join("./", name),
-		os.O_CREATE|os.O_WRONLY|os.O_EXCL,
-		0o600,
-	)
-	if err != nil {
-		panic(err)
-	}
-
-	defer f.Close()
-
-	if err := debug.SetCrashOutput(f, debug.CrashOptions{}); err != nil {
-		panic(err)
-	}
-}
-
-func executeTemplate(tmplPath, targetPath string, data any) error {
+func writeFileTemplate(tmplPath, targetPath string, data any) error {
 	tmpl, err := template.ParseFiles(tmplPath)
 	if err != nil {
 		return err
