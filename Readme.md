@@ -12,7 +12,7 @@ Requirements
 Run the back end
 
 ```
-go run ./
+go run ./cmd/
 ```
 
 # API
@@ -44,7 +44,7 @@ to `info`. `none` silences everything.
 For example:
 
 ```
-LOG_LEVEL=debug go run ./
+LOG_LEVEL=debug go run ./cmd/
 ```
 
 RPC request and response bodies appear under a `json` key. Requests that carry no params
