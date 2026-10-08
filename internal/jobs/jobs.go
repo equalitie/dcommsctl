@@ -88,8 +88,7 @@ func IsJobActive(s JobState) bool {
 }
 
 // jobKey is how a job is indexed in JobManager.jobs. Every read and write must
-// go through it: indexing the same job under two different keys leaves the map
-// holding it twice, which job/list then reports as duplicates.
+// go through it
 func jobKey(instanceID, jobID string) string {
 	return instanceID + "-" + jobID
 }
@@ -139,7 +138,7 @@ func (m *JobManager) LoadJobs() error {
 	return nil
 }
 
-// statusByID looks up a job by its bare id (the value handed back to clients as
+// StatusByID looks up a job by its bare id (the value handed back to clients as
 // job_id), independent of which instance it belongs to. The jobs map is keyed
 // by "instanceID-jobID", but a caller polling job/status only has the bare id.
 func (m *JobManager) StatusByID(id string) (JobStatus, bool) {
