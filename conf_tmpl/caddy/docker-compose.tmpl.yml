@@ -7,6 +7,7 @@ volumes:
 services:
   caddy:
     image: caddy:2.10.2
+    command: ["caddy", "run", "--config", "/etc/caddy/caddy.json"]
     volumes:
       - caddy_data:/data
       - caddy_config:/config
@@ -31,9 +32,9 @@ services:
         host_ip: "127.0.0.1"
     configs:
       - source: caddy-caddyfile-config
-        target: /etc/caddy/Caddyfile
+        target: /etc/caddy/caddy.json
 
 configs:
   caddy-caddyfile-config:
-    file: Caddyfile
+    file: caddy.json
     external: false

@@ -1,5 +1,5 @@
 {
-  "@id": "caddy-route",
+  "@id": "{{ .InstanceID} }}-route",
   "match": [
     {
       "host": [
