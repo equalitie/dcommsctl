@@ -16,10 +16,6 @@ import (
 	"eq/dcommsctl/internal/log"
 )
 
-func main() {
-	fmt.Println("vim-go")
-}
-
 // caddy is a proxy for other services so it's basically a single instance service
 
 type CaddyConfig struct {
@@ -44,19 +40,6 @@ type CaddyRoute struct {
 	Match    []hostMatcher         `json:"match"`
 	Handle   []reverseProxyHandler `json:"handle"`
 	Terminal bool                  `json:"terminal"`
-}
-
-func caddyInstancePath(instancesDir string) (string, error) {
-	pathToInst := path.Join(instancesDir, "caddy")
-	if _, err := os.Stat(pathToInst); err != nil {
-		if os.IsNotExist(err) {
-			return "", nil
-		}
-
-		return "", err
-	}
-
-	return pathToInst, nil
 }
 
 func CaddySendRequest(ctx context.Context, endpoint, method, etag string, payloadJSON []byte) ([]byte, string, error) {
@@ -150,13 +133,20 @@ func DropRoute(ctx context.Context, instanceID string) error {
 	return nil
 }
 
+func caddyInstancePath(instancesDir string) (string, error) {
+	pathToInst := path.Join(instancesDir, "caddy")
+	if _, err := os.Stat(pathToInst); err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+
+		return "", err
+	}
+
+	return pathToInst, nil
+}
+
 func InstanceSetup(applicationsDir, instancesDir string, config CaddyConfig) (string, error) {
-	if config.Domain == "" {
-		config.Domain = "localhost"
-	}
-	if config.Port == 0 {
-		config.Port = 8000
-	}
 	pathToApp := path.Join(applicationsDir, "caddy")
 	pathToInst := path.Join(instancesDir, "caddy")
 
@@ -191,12 +181,12 @@ func InstanceSetup(applicationsDir, instancesDir string, config CaddyConfig) (st
 		return "", err
 	}
 
-	envTmpl, err := template.ParseFiles(path.Join(pathToApp, "Caddyfile.tmpl"))
+	envTmpl, err := template.ParseFiles(path.Join(pathToApp, "caddy.tmpl.json"))
 	if err != nil {
 		return "", err
 	}
 
-	envFile, err := os.OpenFile(path.Join(pathToInst, "Caddyfile"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	envFile, err := os.OpenFile(path.Join(pathToInst, "caddy.json"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
 		return "", err
 	}
