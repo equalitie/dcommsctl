@@ -1,10 +1,12 @@
-package main
+package api
 
 import (
 	"context"
 	"os"
 	"path"
 	"path/filepath"
+
+	"eq/dcommsctl/internal/inst"
 )
 
 type BackupsListArgs struct {
@@ -50,19 +52,19 @@ func getBackups(backupsDir, appName string) ([]string, error) {
 	return r, nil
 }
 
-func (app *GlobalState) rpcBackupsList(ctx context.Context, args BackupsListArgs) (BackupsListResult, error) {
+func (app *GlobalState) BackupsList(ctx context.Context, args BackupsListArgs) (BackupsListResult, error) {
 	appName := args.AppName
 	filterByApp := appName != ""
 	r := BackupsListResult{Backups: []string{}}
 
-	lookIn := appIDs
+	lookIn := inst.AppIDs
 
 	if filterByApp {
 		lookIn = []string{appName}
 	}
 
 	for _, appName := range lookIn {
-		l, err := getBackups(app.systemCfg.BackupsDir, appName)
+		l, err := getBackups(app.SystemCfg.BackupsDir, appName)
 		if err != nil {
 			return r, nil
 		}

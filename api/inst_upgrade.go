@@ -1,9 +1,11 @@
-package main
+package api
 
 import (
 	"context"
 	"fmt"
 	"path"
+
+	"eq/dcommsctl/internal/jobs"
 )
 
 type InstanceUpgradeArgs struct {
@@ -14,15 +16,15 @@ type InstanceUpgradeResult struct {
 	JobID string `json:"job_id"`
 }
 
-func (app *GlobalState) rpcInstanceUpgrade(ctx context.Context, args InstanceUpgradeArgs) (InstanceUpgradeResult, error) {
+func (app *GlobalState) InstanceUpgrade(ctx context.Context, args InstanceUpgradeArgs) (InstanceUpgradeResult, error) {
 	// jobType := "upgrade"
 
 	instanceID := args.InstanceName
 
-	instanceDir := path.Join(app.systemCfg.InstancesDir, instanceID)
+	instanceDir := path.Join(app.SystemCfg.InstancesDir, instanceID)
 	lockFilePath := path.Join(instanceDir, ".job.lock")
 
-	if err := jobTryToLockFile(path.Join(instanceDir, lockFilePath)); err != nil {
+	if err := jobs.JobTryToLockFile(path.Join(instanceDir, lockFilePath)); err != nil {
 		return InstanceUpgradeResult{}, fmt.Errorf("The job is in progress")
 	}
 

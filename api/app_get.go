@@ -1,9 +1,11 @@
-package main
+package api
 
 import (
 	"context"
 	"fmt"
 	"slices"
+
+	"eq/dcommsctl/internal/inst"
 )
 
 type ApplicationGetArgs struct {
@@ -12,8 +14,8 @@ type ApplicationGetArgs struct {
 
 // One catalog entry with the detail apps/list omits. The id is checked against appIDs
 // before it reaches the filesystem, so it cannot walk out of conf_tmpl.
-func rpcApplicationGet(ctx context.Context, args ApplicationGetArgs) (ApplicationDetail, error) {
-	if !slices.Contains(appIDs, args.Id) {
+func ApplicationGet(ctx context.Context, args ApplicationGetArgs) (ApplicationDetail, error) {
+	if !slices.Contains(inst.AppIDs, args.Id) {
 		return ApplicationDetail{}, fmt.Errorf("unknown application: %s", args.Id)
 	}
 

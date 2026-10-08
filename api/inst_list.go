@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"context"
@@ -102,10 +102,10 @@ func instanceStatus(ctx context.Context, instanceDir string) string {
 	return "running"
 }
 
-func (app *GlobalState) rpcInstancesList(ctx context.Context, args InstancesListArgs) (InstancesListResult, error) {
+func (app *GlobalState) InstancesList(ctx context.Context, args InstancesListArgs) (InstancesListResult, error) {
 	r := InstancesListResult{Instances: []InstanceInfo{}}
 
-	entries, err := os.ReadDir(app.systemCfg.InstancesDir)
+	entries, err := os.ReadDir(app.SystemCfg.InstancesDir)
 	if err != nil {
 		return r, err
 	}
@@ -117,7 +117,7 @@ func (app *GlobalState) rpcInstancesList(ctx context.Context, args InstancesList
 
 		id := entry.Name()
 		appName := instanceApp(id)
-		instanceDir := path.Join(app.systemCfg.InstancesDir, id)
+		instanceDir := path.Join(app.SystemCfg.InstancesDir, id)
 
 		r.Instances = append(r.Instances, InstanceInfo{
 			ID:      id,

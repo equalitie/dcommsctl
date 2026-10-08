@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"path"
+
+	"eq/dcommsctl/internal/jobs"
 )
 
 type InstanceExposeArgs struct {
@@ -14,16 +16,16 @@ type InstanceExposeArgs struct {
 
 type InstanceExposeResult struct{}
 
-func (app *GlobalState) rpcInstanceExpose(ctx context.Context, args InstanceExposeArgs) (InstanceExposeResult, error) {
+func (app *GlobalState) InstanceExpose(ctx context.Context, args InstanceExposeArgs) (InstanceExposeResult, error) {
 	instanceID := args.InstanceID
 	if instanceID == "" {
 		return InstanceExposeResult{}, fmt.Errorf("No instance specified")
 	}
 
-	pathToInst := path.Join(app.systemCfg.InstancesDir, instanceID)
+	pathToInst := path.Join(app.SystemCfg.InstancesDir, instanceID)
 	lockFilePath := path.Join(pathToInst, ".job.lock")
 
-	if err := jobTryToLockFile(lockFilePath); err != nil {
+	if err := jobs.JobTryToLockFile(lockFilePath); err != nil {
 		return InstanceExposeResult{}, fmt.Errorf("The job is in progress")
 	}
 
@@ -44,7 +46,7 @@ func (app *GlobalState) rpcInstanceExpose(ctx context.Context, args InstanceExpo
 		return InstanceExposeResult{}, err
 	}
 
-	if err := caddyExportConfig(ctx, app.systemCfg.InstancesDir); err != nil {
+	if err := caddyExportConfig(ctx, app.SystemCfg.InstancesDir); err != nil {
 		return InstanceExposeResult{}, err
 	}
 

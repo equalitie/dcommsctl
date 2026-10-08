@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"context"
@@ -9,7 +9,7 @@ type PanicArgs struct{}
 
 type PanicResult struct{}
 
-func (app *GlobalState) rpcPanic(ctx context.Context, args PanicArgs) (PanicResult, error) {
+func (app *GlobalState) Panic(ctx context.Context, args PanicArgs) (PanicResult, error) {
 	cmd := exec.Command("./scripts/panic.sh")
 
 	if err := cmd.Start(); err != nil {

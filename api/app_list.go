@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"context"
@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path"
+
+	"eq/dcommsctl/internal/inst"
+	"eq/dcommsctl/internal/log"
 )
 
 // One published version. Hand-maintained in each config.json; only Version is required.
@@ -65,14 +68,14 @@ func loadAppConfig(id string) (ApplicationDetail, error) {
 	return app, nil
 }
 
-func rpcApplicationsList(ctx context.Context) (ApplicationListResult, error) {
+func ApplicationsList(ctx context.Context) (ApplicationListResult, error) {
 	r := ApplicationListResult{}
 
 	// Skip definitions that fail to load; one bad file must not fail the whole call.
-	for _, id := range appIDs {
+	for _, id := range inst.AppIDs {
 		app, err := loadAppConfig(id)
 		if err != nil {
-			logInfo("app/list skipping", "app", id, "err", err)
+			log.LogInfo("app/list skipping", "app", id, "err", err)
 			continue
 		}
 

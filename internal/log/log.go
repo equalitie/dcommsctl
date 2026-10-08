@@ -1,4 +1,4 @@
-package main
+package log
 
 import (
 	"context"
@@ -43,7 +43,7 @@ var levelThresholds = map[string]slog.Level{
 // "none" installs a handler that discards everything rather than merely raising the
 // level out of reach, so even a stray slog.Error cannot leak a line someone asked not
 // to see.
-func initLogging() {
+func InitLogging() {
 	name := strings.ToLower(strings.TrimSpace(os.Getenv("LOG_LEVEL")))
 
 	if name == levelNameNone {
@@ -56,7 +56,7 @@ func initLogging() {
 		if name != "" {
 			// Configure first, so the fallback notice is actually emitted.
 			slog.SetDefault(newJSONLogger(os.Stdout, slog.LevelInfo))
-			logInfo("unrecognised LOG_LEVEL, defaulting",
+			LogInfo("unrecognised LOG_LEVEL, defaulting",
 				"LOG_LEVEL", os.Getenv("LOG_LEVEL"), "using", levelNameInfo)
 			return
 		}
@@ -75,13 +75,12 @@ func newJSONLogger(w io.Writer, level slog.Level) *slog.Logger {
 // deliberately thin: slog is the mechanism, these only save repeating the payload
 // handling at every call site.
 
-// logInfo logs at info level with alternating key/value pairs.
-func logInfo(msg string, args ...any) {
+// LogInfo logs at info level with alternating key/value pairs.
+func LogInfo(msg string, args ...any) {
 	slog.Info(msg, args...)
 }
 
-// logWarn logs at warn level with alternating key/value pairs.
-func logWarn(msg string, args ...any) {
+func LogWarn(msg string, args ...any) {
 	slog.Warn(msg, args...)
 }
 
@@ -89,7 +88,7 @@ func logWarn(msg string, args ...any) {
 // pass it as a trailing field so it renders as a field rather than inside the message:
 //
 //	logError("job failed", "job", id, "err", err)
-func logError(msg string, args ...any) {
+func LogError(msg string, args ...any) {
 	slog.Error(msg, args...)
 }
 
@@ -99,14 +98,14 @@ func logError(msg string, args ...any) {
 //
 // Unlike the old log.Fatalf, the deferred functions in main do NOT run, and shutdown is
 // skipped -- which is intended, since there is nothing serving to shut down.
-func logFatal(msg string, args ...any) {
+func LogFatal(msg string, args ...any) {
 	slog.Error(msg, args...)
 	os.Exit(1)
 }
 
 // logDebug logs at debug level with alternating key/value pairs. For anything
 // carrying a JSON payload, prefer logJSON.
-func logDebug(msg string, args ...any) {
+func LogDebug(msg string, args ...any) {
 	slog.Debug(msg, args...)
 }
 
@@ -121,7 +120,7 @@ func logDebug(msg string, args ...any) {
 //
 // The context is context.Background(): slog's context carries handler-level state
 // (sampling, tracing) that a future handler may rely on.
-func logJSON(msg string, payload any, args ...any) {
+func LogJSON(msg string, payload any, args ...any) {
 	logJSONLevel(slog.LevelDebug, msg, payload, args...)
 }
 

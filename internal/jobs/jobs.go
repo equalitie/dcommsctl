@@ -1,4 +1,4 @@
-package main
+package jobs
 
 import (
 	"context"
@@ -13,9 +13,13 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"eq/dcommsctl/internal/log"
 )
 
 // this is a file for handling jobs: whatever client requested us to do and we essentially run it in async mode
+
+const ScriptGracePeriod = 20 * time.Second
 
 type JobID string
 
@@ -55,9 +59,9 @@ type JobManager struct {
 	dumpMu sync.RWMutex
 	jobs   map[string]*JobRecord
 
-	jobsDBpath string
+	JobsDBpath string
 
-	jobsPath string
+	JobsPath string
 }
 
 type JobLogChunk struct {
@@ -70,7 +74,7 @@ const maxLogChunk = 64 * 1024
 
 var jobCounter atomic.Uint64
 
-func makeJobID(jobType string) string {
+func MakeJobID(jobType string) string {
 	return fmt.Sprintf(
 		"%s-%s-%d",
 		jobType,
@@ -79,7 +83,7 @@ func makeJobID(jobType string) string {
 	)
 }
 
-func isJobActive(s JobState) bool {
+func IsJobActive(s JobState) bool {
 	return s == JobPending || s == JobRunning
 }
 
@@ -90,10 +94,10 @@ func jobKey(instanceID, jobID string) string {
 	return instanceID + "-" + jobID
 }
 
-func jobTryToLockFile(lockPath string) error {
+func JobTryToLockFile(lockPath string) error {
 	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
-		logError("cannot take job lock", "lock", lockPath, "err", err)
+		log.LogError("cannot take job lock", "lock", lockPath, "err", err)
 		return err
 	}
 	f.Close()
@@ -108,8 +112,11 @@ func NewJobManager(ctx context.Context) *JobManager {
 	}
 }
 
-func (m *JobManager) loadJobs() error {
-	data, err := os.ReadFile(m.jobsDBpath)
+func (m *JobManager) Context() context.Context    { return m.ctx }
+func (m *JobManager) Jobs() map[string]*JobRecord { return m.jobs }
+
+func (m *JobManager) LoadJobs() error {
+	data, err := os.ReadFile(m.JobsDBpath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			// did not find the file, move on
@@ -135,7 +142,7 @@ func (m *JobManager) loadJobs() error {
 // statusByID looks up a job by its bare id (the value handed back to clients as
 // job_id), independent of which instance it belongs to. The jobs map is keyed
 // by "instanceID-jobID", but a caller polling job/status only has the bare id.
-func (m *JobManager) statusByID(id string) (JobStatus, bool) {
+func (m *JobManager) StatusByID(id string) (JobStatus, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -148,7 +155,7 @@ func (m *JobManager) statusByID(id string) (JobStatus, bool) {
 	return JobStatus{}, false
 }
 
-func (m *JobManager) fetchLog(id string, offset int64) (JobLogChunk, error) {
+func (m *JobManager) FetchLog(id string, offset int64) (JobLogChunk, error) {
 	logPath, state, found := m.logSource(id)
 	if !found {
 		return JobLogChunk{}, fmt.Errorf("unknown job: %s", id)
@@ -175,7 +182,7 @@ func (m *JobManager) fetchLog(id string, offset int64) (JobLogChunk, error) {
 	if offset >= size {
 		return JobLogChunk{
 			NextOffset: offset,
-			Finished:   !isJobActive(state),
+			Finished:   !IsJobActive(state),
 		}, nil
 	}
 
@@ -200,7 +207,7 @@ func (m *JobManager) fetchLog(id string, offset int64) (JobLogChunk, error) {
 	return JobLogChunk{
 		LogChunk:   buf[:n],
 		NextOffset: next,
-		Finished:   next >= size && !isJobActive(state),
+		Finished:   next >= size && !IsJobActive(state),
 	}, nil
 }
 
@@ -231,8 +238,8 @@ func (m *JobManager) update(instanceID, id string, fn func(rec *JobRecord)) bool
 	return true
 }
 
-func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jobType string, cmd *exec.Cmd) (jobID string, err error) {
-	jobID = makeJobID(jobType)
+func (m *JobManager) StartExec(ctx context.Context, instanceID, lockFilePath, jobType string, cmd *exec.Cmd) (jobID string, err error) {
+	jobID = MakeJobID(jobType)
 	logFilePath := filepath.Join(cmd.Dir, "jobs", jobID+".log")
 	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
@@ -244,7 +251,7 @@ func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jo
 
 	cmd.Stdout = wout
 	cmd.Stderr = werr
-	cmd.WaitDelay = scriptGracePeriod
+	cmd.WaitDelay = ScriptGracePeriod
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	cmd.Cancel = func() error {
@@ -259,7 +266,7 @@ func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jo
 		logFile.Close()
 		os.Remove(logFilePath)
 		if err := os.Remove(lockFilePath); err != nil {
-			logError("Failed to remove lock file after Start", "err", err)
+			log.LogError("Failed to remove lock file after Start", "err", err)
 		}
 		return "", err
 	}
@@ -283,7 +290,7 @@ func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jo
 	if err := m.dumpJobs(); err != nil {
 		logFile.Close()
 		if err := os.Remove(lockFilePath); err != nil {
-			logError("Failed to remove lock file after dumpjobs", "err", err)
+			log.LogError("Failed to remove lock file after dumpjobs", "err", err)
 		}
 		return "", err
 	}
@@ -294,7 +301,7 @@ func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jo
 			if err := os.Remove(lockFilePath); err != nil {
 				fmt.Println(instanceID)
 				fmt.Println(jobType)
-				logError("Failed to remove lock file after the script is done", "err", err)
+				log.LogError("Failed to remove lock file after the script is done", "err", err)
 			}
 		}()
 
@@ -311,7 +318,7 @@ func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jo
 		})
 
 		if err := m.dumpJobs(); err != nil {
-			logError("cannot persist job state", "err", err)
+			log.LogError("cannot persist job state", "err", err)
 		}
 	}()
 
@@ -332,7 +339,7 @@ func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jo
 // Call this once at startup, before serving. It must happen before any job is started, because
 // repairInterruptedJob's correctness depends on no job having been spawned yet in this process.
 func (m *JobManager) Load() error {
-	data, err := os.ReadFile(m.jobsDBpath)
+	data, err := os.ReadFile(m.JobsDBpath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			// First run: no state file yet. Not an error.
@@ -364,7 +371,7 @@ func (m *JobManager) Load() error {
 	// A failure is not fatal -- the repaired state is already live in memory and the repair is
 	// idempotent, so the next restart redoes it.
 	if err := m.dumpJobs(); err != nil {
-		logError("cannot persist job state after loading it", "err", err)
+		log.LogError("cannot persist job state after loading it", "err", err)
 	}
 
 	return nil
@@ -397,16 +404,16 @@ func (m *JobManager) dumpJobs() error {
 	m.dumpMu.Lock()
 	defer m.dumpMu.Unlock()
 
-	return os.WriteFile(m.jobsDBpath, d, 0o644)
+	return os.WriteFile(m.JobsDBpath, d, 0o644)
 }
 
 func (m *JobManager) absPath(path string) string {
-	return filepath.Join(m.jobsPath, path)
+	return filepath.Join(m.JobsPath, path)
 }
 
 func (m *JobManager) relPath(path string) string {
 	// TODO(max): I don't like that this silently succeeds
-	rel, err := filepath.Rel(m.jobsPath, path)
+	rel, err := filepath.Rel(m.JobsPath, path)
 	if err != nil {
 		return path
 	}
@@ -448,84 +455,11 @@ func repairInterruptedJob(jobKey string, rec *JobRecord) {
 
 	// `reason` rather than Status.Error: markInterrupted overwrote the error, so the pre-repair
 	// state is not kept and the reason is the whole explanation.
-	logWarn("repaired a job left active by a previous daemon",
+	log.LogWarn("repaired a job left active by a previous daemon",
 		"job", jobKey, "reason", reason, "log", rec.LogFilePath)
 
 	if err := os.Remove(rec.LockFilePath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		logError("cannot remove lock file of interrupted job",
+		log.LogError("cannot remove lock file of interrupted job",
 			"job", jobKey, "lock", rec.LockFilePath, "err", err)
 	}
-}
-
-var instanceNames = []string{
-	"aardwolf",
-	"axolotl",
-	"babirusa",
-	"bilby",
-	"binturong",
-	"bongo",
-	"caracal",
-	"coati",
-	"dhole",
-	"dikdik",
-	"dugong",
-	"echidna",
-	"fossa",
-	"gerenuk",
-	"genet",
-	"goura",
-	"hirola",
-	"indri",
-	"jerboa",
-	"kakapo",
-	"kinkajou",
-	"klipspringer",
-	"kudu",
-	"linsang",
-	"margay",
-	"markhor",
-	"numbat",
-	"okapi",
-	"onager",
-	"olingo",
-	"pademelon",
-	"pangolin",
-	"pika",
-	"quokka",
-	"quoll",
-	"saiga",
-	"serval",
-	"solenodon",
-	"takin",
-	"tamandua",
-	"tarsier",
-	"tenrec",
-	"tuatara",
-	"uakari",
-	"vaquita",
-	"wallaroo",
-	"xerus",
-	"yapok",
-	"zorilla",
-	"agouti",
-	"anoa",
-	"bharal",
-	"cacomistle",
-	"cuscus",
-	"galago",
-	"iriomote",
-	"jentink",
-	"kiang",
-	"kouprey",
-	"manul",
-	"muntjac",
-	"nyala",
-	"oryx",
-	"potto",
-	"sifaka",
-	"tahr",
-	"vicuna",
-	"viscacha",
-	"zebu",
-	"zokor",
 }

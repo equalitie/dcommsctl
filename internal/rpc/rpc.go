@@ -1,4 +1,4 @@
-package main
+package rpc
 
 import (
 	"context"
@@ -17,6 +17,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/sourcegraph/jsonrpc2"
 	wsstream "github.com/sourcegraph/jsonrpc2/websocket"
+
+	"eq/dcommsctl/internal/log"
 )
 
 var (
@@ -261,13 +263,13 @@ type Server struct {
 	// Logger, if non-nil, receives connect/disconnect and cleanup messages.
 	Logger *slog.Logger
 
-	reg      *registry
+	Reg      *registry
 	upgrader websocket.Upgrader
 }
 
 func NewJRPCServer() *Server {
 	return &Server{
-		reg:      newRegistry(),
+		Reg:      newRegistry(),
 		upgrader: websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
 	}
 }
@@ -280,7 +282,7 @@ func NewJRPCServer() *Server {
 //	func(ctx context.Context) (R, error)
 //
 // The context is optional. Only used for server-sent messages
-func (s *Server) Register(name string, fn any) { s.reg.register(name, fn) }
+func (s *Server) Register(name string, fn any) { s.Reg.register(name, fn) }
 
 func (s *Server) Handler() http.Handler { return s }
 
@@ -328,9 +330,9 @@ func (h *connHandler) Handle(ctx context.Context, c *jsonrpc2.Conn, req *jsonrpc
 	// Params are logged raw rather than re-encoded: they arrive as *json.RawMessage and
 	// jsonValue passes that through, preserving the exact wire form (including key
 	// order) that a client and server disagreeing about is worth seeing.
-	logJSON("--> request", req.Params, "method", req.Method, "id", req.ID)
+	log.LogJSON("--> request", req.Params, "method", req.Method, "id", req.ID)
 
-	result, err := h.srv.reg.call(ctx, req.Method, req.Params)
+	result, err := h.srv.Reg.call(ctx, req.Method, req.Params)
 	if req.Notif {
 		return
 	}
@@ -339,13 +341,13 @@ func (h *connHandler) Handle(ctx context.Context, c *jsonrpc2.Conn, req *jsonrpc
 		if !errors.As(err, &rpcErr) {
 			rpcErr = &jsonrpc2.Error{Code: jsonrpc2.CodeInternalError, Message: err.Error()}
 		}
-		logJSON("<-- error", nil,
+		log.LogJSON("<-- error", nil,
 			"method", req.Method, "id", req.ID, "code", rpcErr.Code, "message", rpcErr.Message)
 		c.ReplyWithError(ctx, req.ID, rpcErr)
 		return
 	}
 
-	logJSON("<-- result", result, "method", req.Method, "id", req.ID)
+	log.LogJSON("<-- result", result, "method", req.Method, "id", req.ID)
 
 	c.Reply(ctx, req.ID, result)
 }

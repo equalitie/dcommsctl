@@ -1,4 +1,4 @@
-package main
+package api
 
 import "context"
 
@@ -8,6 +8,6 @@ type InstanceHideArgs struct {
 
 type InstanceHideResult struct{}
 
-func rpcInstanceHide(ctx context.Context, args InstanceHideArgs) (InstanceHideResult, error) {
+func InstanceHide(ctx context.Context, args InstanceHideArgs) (InstanceHideResult, error) {
 	return InstanceHideResult{}, nil
 }

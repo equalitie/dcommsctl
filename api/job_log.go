@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"context"
@@ -23,10 +23,10 @@ type JobLogResult struct {
 	Done bool `json:"done"`
 }
 
-func (app *GlobalState) rpcJobLog(ctx context.Context, args JobLogArgs) (JobLogResult, error) {
+func (app *GlobalState) JobLog(ctx context.Context, args JobLogArgs) (JobLogResult, error) {
 	r := JobLogResult{}
 
-	l, err := app.jobsManager.fetchLog(args.JobID, args.Offset)
+	l, err := app.JobsManager.FetchLog(args.JobID, args.Offset)
 	if err != nil {
 		return JobLogResult{}, err
 	}

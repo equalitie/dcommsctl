@@ -1,6 +1,10 @@
-package main
+package api
 
-import "context"
+import (
+	"context"
+
+	"eq/dcommsctl/internal/jobs"
+)
 
 type JobsListArgs struct {
 	InstanceID string `json:"instance_id"`
@@ -8,14 +12,14 @@ type JobsListArgs struct {
 }
 
 type JobsListResult struct {
-	Jobs []JobStatus `json:"jobs"`
+	Jobs []jobs.JobStatus `json:"jobs"`
 }
 
-func (app *GlobalState) rpcJobsList(ctx context.Context, args JobsListArgs) (JobsListResult, error) {
+func (app *GlobalState) JobsList(ctx context.Context, args JobsListArgs) (JobsListResult, error) {
 	instanceID := args.InstanceID
 	filterByInstance := instanceID != ""
-	r := JobsListResult{Jobs: []JobStatus{}}
-	for _, j := range app.jobsManager.jobs {
+	r := JobsListResult{Jobs: []jobs.JobStatus{}}
+	for _, j := range app.JobsManager.Jobs() {
 		if filterByInstance {
 			if j.Status.InstanceID != instanceID {
 				continue
@@ -23,7 +27,7 @@ func (app *GlobalState) rpcJobsList(ctx context.Context, args JobsListArgs) (Job
 		}
 
 		if args.ActiveOnly {
-			if !isJobActive(j.Status.State) {
+			if !jobs.IsJobActive(j.Status.State) {
 				continue
 			}
 		}
