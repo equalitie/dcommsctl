@@ -13,7 +13,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
-	"text/template"
 	"time"
 
 	"eq/dcommsctl/api"
@@ -21,24 +20,6 @@ import (
 	"eq/dcommsctl/internal/log"
 	"eq/dcommsctl/internal/rpc"
 )
-
-func writeFileTemplate(tmplPath, targetPath string, data any) error {
-	tmpl, err := template.ParseFiles(tmplPath)
-	if err != nil {
-		return err
-	}
-
-	composeFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-
-	if err := tmpl.Execute(composeFile, &data); err != nil {
-		return err
-	}
-
-	return nil
-}
 
 func pollJobStatus(ctx context.Context, app *api.GlobalState, jobID string) error {
 	ticker := time.NewTicker(1 * time.Second)
