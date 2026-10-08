@@ -548,6 +548,54 @@
         width: 100%;
       }
 
+      button:disabled {
+        cursor: not-allowed;
+        opacity: .6;
+      }
+
+      .restore-dialog {
+        width: min(480px, calc(100% - 32px));
+        max-height: calc(100% - 32px);
+        padding: 24px;
+        overflow-y: auto;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+        color: var(--ink);
+        box-shadow: 0 24px 80px #183b3833;
+      }
+
+      .restore-dialog::backdrop {
+        background: #183b3866;
+      }
+
+      .restore-dialog h2 {
+        margin-bottom: 8px;
+      }
+
+      .restore-dialog-description {
+        margin: 0 0 22px;
+        color: var(--muted);
+      }
+
+      .dialog-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      .dialog-status {
+        min-height: 21px;
+        margin: 0;
+        color: var(--muted);
+        overflow-wrap: anywhere;
+      }
+
+      .dialog-status[data-error="true"] {
+        color: #b42318;
+      }
+
       .helper {
         display: flex;
         gap: 7px;
@@ -802,6 +850,8 @@
 
       let dawaInstanceId = null;
       let pendingInstallApp = null;
+      let restoreBackupRequestId = null;
+      let restoreRequestId = null;
 
       ws.onopen = () => {
         document.getElementById('result').textContent = 'connected';
@@ -814,41 +864,58 @@
 
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
+        const result = data.result || {};
+
+        if (restoreBackupRequestId !== null && data.id === restoreBackupRequestId) {
+          restoreBackupRequestId = null;
+          if (data.error || !Array.isArray(result.backups)) {
+            setRestoreStatus(data.error?.message || 'Unable to load backups.', true);
+            fillBackupSelect(document.getElementById('restore-backup-id'), [], 'Unable to load backups');
+          } else {
+            const select = document.getElementById('restore-backup-id');
+            fillBackupSelect(select, result.backups, 'No backups available');
+            document.getElementById('restore-submit').disabled = !result.backups.length;
+            setRestoreStatus(result.backups.length ? '' : 'No backups available to restore.');
+            if (result.backups.length) select.focus();
+          }
+        }
+
+        if (restoreRequestId !== null && data.id === restoreRequestId) {
+          restoreRequestId = null;
+          document.getElementById('restore-cancel').disabled = false;
+          if (data.error) {
+            document.getElementById('restore-submit').disabled = false;
+            setRestoreStatus(data.error.message || 'Unable to restore the instance.', true);
+          } else {
+            document.getElementById('restore-dialog').close();
+          }
+        }
 
         if (data.error) {
 
         } else {
-          if (Array.isArray(data.result.applications)) {
-            renderApps(data.result.applications);
+          if (Array.isArray(result.applications)) {
+            renderApps(result.applications);
           }
-          if (data.result.id) {
-            document.getElementById("instance_id").value = data.result.id;
+          if (result.id) {
+            document.getElementById("instance_id").value = result.id;
           }
-          if (data.result.job_id) {
-            document.getElementById("job_id").value = data.result.job_id;
-          }
-
-          if (data.result.log) {
-            document.getElementById("job_log").innerText = data.result.log;
+          if (result.job_id) {
+            document.getElementById("job_id").value = result.job_id;
           }
 
-          if (data.result.backups) {
-
-            const s = document.getElementById("backup-id");
-
-            let opt = '';
-
-            for (const b of data.result.backups) {
-              opt += `<option value=${b}>${b}</option>`;
-
-            }
-            s.innerHTML = opt;
+          if (result.log) {
+            document.getElementById("job_log").innerText = result.log;
           }
 
-          if (data.result.jobs) {
+          if (Array.isArray(result.backups)) {
+            fillBackupSelect(document.getElementById('backup-id'), result.backups, 'No backups available');
+          }
+
+          if (result.jobs) {
 
             let html = '<table>';
-            for (const jb of data.result.jobs) {
+            for (const jb of result.jobs) {
               html += `<tr><td>${jb.id}</td><td>${jb.type}</td><td>${jb.state}</td><td>${jb.exit_code}</td><td><button onclick="checkJobStatus('${jb.id}')">status</button><button onclick="checkJobLog('${jb.id}')">log</button></td></tr>`;
             }
 
@@ -857,10 +924,10 @@
             document.getElementById('jobs').innerHTML = html;
 
           }
-          if (data.result.instances) {
+          if (result.instances) {
             let html = '<table>';
-            for (const inst of data.result.instances) {
-              html += `<tr><td>${inst.id}</td><td>${inst.app}</td><td><a href="https://${inst.domain}:3443">${inst.domain}</a></td><td>${inst.status}</td><td>${inst.version}</td><td><button onclick="sendStart('${inst.id}')">start</button><button onclick="sendStop('${inst.id}')">stop</button><button onclick="sendBackup('${inst.id}')">backup</button><button onclick="initRestore('${inst.id}')">mark for restore</button><button onclick="exposeInstance('${inst.id}')">expose</button></td></tr>`;
+            for (const inst of result.instances) {
+              html += `<tr><td>${inst.id}</td><td>${inst.app}</td><td><a href="https://${inst.domain}:3443">${inst.domain}</a></td><td>${inst.status}</td><td>${inst.version}</td><td><button onclick="sendStart('${inst.id}')">start</button><button onclick="sendStop('${inst.id}')">stop</button><button onclick="sendBackup('${inst.id}')">backup</button><button onclick="initRestore('${inst.id}')">Restore</button><button onclick="exposeInstance('${inst.id}')">expose</button></td></tr>`;
             }
 
             html += '</table>';
@@ -869,7 +936,7 @@
           }
         }
 
-        if (!data.result.jobs && !data.result.instances) {
+        if (!result.jobs && !result.instances) {
           document.getElementById('result').textContent = JSON.stringify(data, null, 2);
         }
       };
@@ -878,13 +945,27 @@
         document.getElementById('result').textContent = err;
       };
 
+      ws.onclose = () => {
+        if (restoreBackupRequestId !== null || restoreRequestId !== null) {
+          restoreBackupRequestId = null;
+          restoreRequestId = null;
+          document.getElementById('restore-submit').disabled = true;
+          document.getElementById('restore-cancel').disabled = false;
+          setRestoreStatus('Connection closed. Check the server response and jobs before trying again.', true);
+        }
+      };
+
       function send(method, params) {
+        if (ws.readyState !== WebSocket.OPEN) {
+          throw new Error('The server connection is not open.');
+        }
         ws.send(JSON.stringify({
           jsonrpc: '2.0',
           method,
           params,
           id: ++reqID
         }));
+        return reqID;
       }
 
       function getAllJobs() {
@@ -992,11 +1073,23 @@
 
       function initRestore(instanceId) {
         document.getElementById("instance_id").value = instanceId;
-
+        document.getElementById('restore-instance-id').value = instanceId;
+        const dialog = document.getElementById('restore-dialog');
+        fillBackupSelect(document.getElementById('restore-backup-id'), [], 'Loading backups…');
+        document.getElementById('restore-submit').disabled = true;
+        document.getElementById('restore-cancel').disabled = false;
+        setRestoreStatus('Loading backups…');
+        dialog.showModal();
+        try {
+          restoreBackupRequestId = getBackups();
+        } catch (error) {
+          setRestoreStatus('Unable to load backups. Check the connection and reopen the dialog.', true);
+          fillBackupSelect(document.getElementById('restore-backup-id'), [], 'Unable to load backups');
+        }
       }
 
       function sendRestore(instanceId, backupId) {
-        send('inst/restore', {
+        return send('inst/restore', {
           instance_id: instanceId,
           backup_id: backupId
         });
@@ -1008,9 +1101,55 @@
         });
       }
 
-      function getBackups(instanceId) {
-        send('backup/list', {});
+      function getBackups() {
+        return send('backup/list', {});
       }
+
+      function fillBackupSelect(select, backups, emptyLabel) {
+        select.replaceChildren();
+        for (const backup of backups) {
+          select.add(new Option(backup, backup));
+        }
+        if (!backups.length) select.add(new Option(emptyLabel, ''));
+        select.disabled = !backups.length;
+      }
+
+      function setRestoreStatus(message, isError = false) {
+        const status = document.getElementById('restore-status');
+        status.textContent = message;
+        status.dataset.error = String(isError);
+      }
+
+      function submitRestore(event) {
+        event.preventDefault();
+        const instanceId = document.getElementById('restore-instance-id').value;
+        const backupId = document.getElementById('restore-backup-id').value;
+        if (restoreRequestId !== null || restoreBackupRequestId !== null) return;
+        if (!instanceId || !backupId) {
+          setRestoreStatus('Choose an instance and a backup to restore.', true);
+          return;
+        }
+        document.getElementById('restore-submit').disabled = true;
+        document.getElementById('restore-cancel').disabled = true;
+        setRestoreStatus('Sending restore request…');
+        try {
+          restoreRequestId = sendRestore(instanceId, backupId);
+        } catch (error) {
+          document.getElementById('restore-submit').disabled = false;
+          document.getElementById('restore-cancel').disabled = false;
+          setRestoreStatus('Unable to send the restore request. Check the connection and try again.', true);
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        const dialog = document.getElementById('restore-dialog');
+        dialog.addEventListener('cancel', (event) => {
+          if (restoreRequestId !== null) event.preventDefault();
+        });
+        dialog.addEventListener('close', () => {
+          if (!dialog.open) restoreBackupRequestId = null;
+        });
+      });
     </script>
     <svg class="icon-definitions"
          xmlns="http://www.w3.org/2000/svg"
@@ -1188,7 +1327,7 @@
                   <p class="helper">
                     <svg class="icon" aria-hidden="true">
                       <use href="#icon-info" />
-                    </svg>Use “mark for restore” on an instance to fill its ID.
+                    </svg>Use “Restore” on an instance to choose a backup in the dialog.
                   </p>
                 </div>
               </section>
@@ -1226,5 +1365,26 @@
             <span>Instance Manager</span><span>Simple tools. Your infrastructure.</span>
           </footer>
         </main>
+        <dialog id="restore-dialog" class="restore-dialog"
+                aria-labelledby="restore-dialog-heading"
+                aria-describedby="restore-dialog-description">
+          <form onsubmit="submitRestore(event)">
+            <h2 id="restore-dialog-heading">Restore an instance</h2>
+            <p id="restore-dialog-description" class="restore-dialog-description">Choose a backup to bring this instance back to a saved state.</p>
+            <div class="field">
+              <label for="restore-instance-id">Instance ID</label>
+              <input id="restore-instance-id" type="text" readonly spellcheck="false">
+            </div>
+            <div class="field">
+              <label for="restore-backup-id">Backup</label>
+              <select id="restore-backup-id" required disabled></select>
+            </div>
+            <p id="restore-status" class="dialog-status" role="status" aria-live="polite"></p>
+            <div class="dialog-actions">
+              <button id="restore-cancel" type="button" onclick="document.getElementById('restore-dialog').close()">Cancel</button>
+              <button id="restore-submit" class="button-primary" type="submit" disabled>Restore</button>
+            </div>
+          </form>
+        </dialog>
       </body>
     </html>

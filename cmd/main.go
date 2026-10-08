@@ -70,6 +70,9 @@ func initApps(ctx context.Context, app *api.GlobalState) error {
 		return err
 	}
 
+	// FIXME: ping the caddy to make sure it's up, sometimes we fail here
+	// because dawa asks too early to add a route
+
 	// FIXME: get the actual port
 	log.LogInfo("Caddy should be running on port :8000 SSL on port :3443")
 
