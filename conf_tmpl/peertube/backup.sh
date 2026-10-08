@@ -1,76 +1,97 @@
 #!/bin/bash
 
-set -oeu pipefail
+set -euo pipefail
 umask 077
 
-# FIXME: pass instance name
-final_dir="$BACKUP_ROOT/peertube/$BACKUP_ID"
+final_dir="$BACKUP_ROOT/$BACKUP_ID"
 work_dir="$final_dir.partial"
+work_created=0
 completed=0
+restart_needed=0
 
 cleanup() {
-  status=$?
+  local status=$?
+  trap - EXIT INT TERM
+  set +e
 
-  # NOTE: can I just run this and not store if containers was stopped
-  docker compose start peertube-back 2>/dev/null
+  if (( restart_needed )); then
+    if ! docker compose start peertube-back; then
+      printf 'ERROR: failed to restart peertube-back.\n' >&2
+      if (( status == 0 )); then status=1; fi
+    fi
+  fi
 
-  if [ "$completed" -ne 1 ] && [ -n "${work_dir:-}" ] && [ -d "$work_dir" ]; then
-    rm -rf -- "$work_dir"
+  if (( work_created && ! completed )); then
+    if ! rm -rf -- "$work_dir"; then
+      printf 'ERROR: failed to remove %s\n' "$work_dir" >&2
+      if (( status == 0 )); then status=1; fi
+    fi
   fi
 
   exit "$status"
 }
 
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
-# maybe we should check and prevent backup if the final dir exists
-# but for now having $final_dir means backup was succesful and this one is not yet
-rm -rf "$final_dir"
+mkdir -p -- "$BACKUP_ROOT"
 
-mkdir -p "$work_dir"
+if [[ -e "$final_dir" || -L "$final_dir" ]]; then
+  printf 'Refusing to overwrite existing backup: %s\n' "$final_dir" >&2
+  exit 1
+fi
 
-docker compose stop peertube-back
+container_id="$(docker compose ps -aq peertube-back)"
+if [[ -z "$container_id" || "$container_id" == *$'\n'* ]]; then
+  printf 'Expected exactly one peertube-back container.\n' >&2
+  exit 1
+fi
+was_running="$(docker inspect --format '{{.State.Running}}' "$container_id")"
 
-docker compose exec -T peertube-postgres sh -c \
-  'PGPASSWORD=$POSTGRES_PASSWORD psql \
-    -U "$POSTGRES_USER" \
-    -d "$POSTGRES_DB" \
-    -v ON_ERROR_STOP=1' \
-  > /dev/null <<'SQL'
-DO $$
-BEGIN
-  WHILE EXISTS (
-    SELECT 1
-    FROM pg_stat_activity
-    WHERE datname = current_database()
-      AND pid <> pg_backend_pid()
-      AND backend_type = 'client backend'
-  ) LOOP
-    PERFORM pg_sleep(1);
-  END LOOP;
-END
-$$;
-SQL
+# An existing staging directory is left untouched; use a new BACKUP_ID.
+mkdir -- "$work_dir"
+work_created=1
 
-docker compose exec -T peertube-postgres sh -c \
-  'PGPASSWORD=$POSTGRES_PASSWORD pg_dumpall 2>/dev/null \
-    -U $POSTGRES_USER \
-    -l $POSTGRES_DB' | \
-  gzip > "$work_dir/pgump.sql.gz"
+if [[ "$was_running" == true ]]; then
+  # Set before stopping so cleanup also handles an interrupted stop.
+  restart_needed=1
+  docker compose stop peertube-back
+fi
 
-# FIXME: figure out auth, works for default setup with an empty password
-docker compose exec -T peertube-redis sh -c \
-  'redis-cli SAVE' | \
-  gzip > "$work_dir/redis.rdb.gz"
+# Keep the cluster-wide SQL dump, including roles, from the original script.
+# pg_dump uses a consistent snapshot; waiting for all clients is unnecessary.
+docker compose exec -T peertube-postgres sh -eu -c '
+  export PGPASSWORD="${POSTGRES_PASSWORD:-}"
+  exec pg_dumpall -U "$POSTGRES_USER" -l "$POSTGRES_DB"
+' | gzip > "$work_dir/pgdump.sql.gz"
 
+# Optional authentication: set REDISCLI_AUTH in the script environment.
+# Otherwise redis-cli inherits any authentication configured in the container.
+redis_env=()
+if [[ ${REDISCLI_AUTH+x} ]]; then
+  redis_env=(-e "REDISCLI_AUTH=$REDISCLI_AUTH")
+fi
+
+# --rdb - writes the actual binary snapshot to stdout.
+docker compose exec -T "${redis_env[@]}" peertube-redis \
+  redis-cli --rdb - | gzip > "$work_dir/redis.rdb.gz"
+
+# The host shell writes the archive, avoiding bind-mount UID mapping issues.
 docker run --rm \
-  --user "$(id -u):$(id -g)" \
-  --volumes-from $(docker compose ps -aq peertube-back) \
-  -v "$work_dir:/backup" \
+  --volumes-from "$container_id:ro" \
   alpine:latest \
-  tar czf /backup/content.tar.gz /data
+  tar -czf - -C / data \
+  > "$work_dir/content.tar.gz"
 
 chmod 600 "$work_dir"/*
-mv -- "$work_dir" "$final_dir"
 
+# GNU mv: do not nest into or overwrite a destination created in the meantime.
+mv -Tn -- "$work_dir" "$final_dir"
+if [[ -e "$work_dir" ]]; then
+  printf 'Refusing to overwrite existing backup: %s\n' "$final_dir" >&2
+  exit 1
+fi
 completed=1
+
+printf 'Backup complete: %s\n' "$final_dir"

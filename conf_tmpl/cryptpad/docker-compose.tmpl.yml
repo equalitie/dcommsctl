@@ -1,31 +1,64 @@
+x-cryptpad-volumes: &cryptpad-volumes
+  - blob:/cryptpad/blob
+  - block:/cryptpad/block
+  - customize:/cryptpad/customize
+  - data:/cryptpad/data
+  - datastore:/cryptpad/datastore
+  - onlyoffice-dist:/cryptpad/www/common/onlyoffice/dist
+  - onlyoffice-conf:/cryptpad/onlyoffice-conf
+
 services:
+  cryptpad-init:
+    image: cryptpad/cryptpad:latest
+    user: "0:0"
+    restart: "no"
+    healthcheck:
+      disable: true
+    volumes: *cryptpad-volumes
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - >-
+        chown -R 4001:4001
+        /cryptpad/blob
+        /cryptpad/block
+        /cryptpad/customize
+        /cryptpad/data
+        /cryptpad/datastore
+        /cryptpad/www/common/onlyoffice/dist
+        /cryptpad/onlyoffice-conf
+
   cryptpad:
-    image: "cryptpad/cryptpad:latest"
+    image: cryptpad/cryptpad:latest
     hostname: cryptpad
-
+    restart: unless-stopped
+    env_file: ./.env
+    networks:
+      proxy:
+        aliases:
+          - {{ .InstanceID }}
+    depends_on:
+      cryptpad-init:
+        condition: service_completed_successfully
     environment:
-      - CPAD_MAIN_DOMAIN=https://your-main-domain.com
-      - CPAD_SANDBOX_DOMAIN=https://your-sandbox-domain.com
-      - CPAD_CONF=/cryptpad/config/config.js
-
-      # Read and accept the license before uncommenting the following line:
-      # https://github.com/ONLYOFFICE/web-apps/blob/master/LICENSE.txt
-      # - CPAD_INSTALL_ONLYOFFICE=yes
-
-    volumes:
-      - ./data/blob:/cryptpad/blob
-      - ./data/block:/cryptpad/block
-      - ./customize:/cryptpad/customize
-      - ./data/data:/cryptpad/data
-      - ./data/files:/cryptpad/datastore
-      - ./onlyoffice-dist:/cryptpad/www/common/onlyoffice/dist
-      - ./onlyoffice-conf:/cryptpad/onlyoffice-conf
-
+      CPAD_MAIN_DOMAIN: "https://${SITE_DOMAIN}:${WEB_PORT}"
+      CPAD_SANDBOX_DOMAIN: "https://sandbox.${SITE_DOMAIN}:${WEB_PORT}"
+      CPAD_CONF: "/cryptpad/config/config.js"
+      # Enable after reading and accepting the OnlyOffice license:
+      # CPAD_INSTALL_ONLYOFFICE: "yes"
+    volumes: *cryptpad-volumes
     ports:
-      - "3000:3000"
-      - "3003:3003"
+      - "3004:3000"
+      - "3006:3003"
 
-    ulimits:
-      nofile:
-        soft: 1000000
-        hard: 1000000
+networks:
+  proxy:
+    external: true
+
+volumes:
+  blob:
+  block:
+  customize:
+  data:
+  datastore:
+  onlyoffice-dist:
+  onlyoffice-conf:

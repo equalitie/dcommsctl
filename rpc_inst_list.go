@@ -34,6 +34,8 @@ var domainEnvKeys = map[string]string{
 	"peertube": "PEERTUBE_WEBSERVER_HOSTNAME",
 	"dawa":     "SITE_DOMAIN",
 	"mastodon": "LOCAL_DOMAIN",
+	"cryptpad": "SITE_DOMAIN",
+	"synapse":  "SITE_DOMAIN",
 }
 
 // instanceApp recovers the app an instance was created from out of its

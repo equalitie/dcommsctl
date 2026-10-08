@@ -1,5 +1,5 @@
 {
-    "id": "peertube",
-    "name": "Peertube",
+    "id": "cryptpad",
+    "name": "Cryptpad",
     "redirect_uri": "/tmp_redirect"
 }

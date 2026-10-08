@@ -1,0 +1,30 @@
+{
+  "@id": "caddy-route",
+  "match": [
+    {
+      "host": [
+        "{{ .Domain }}"
+      ]
+    }
+  ],
+  "handle": [
+    {
+      "handler": "subroute",
+      "routes": [
+        {
+          "handle": [
+            {
+              "handler": "reverse_proxy",
+              "upstreams": [
+                {
+                  "dial": "{{ .InstanceID }}:3000"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "terminal": true
+}

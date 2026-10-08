@@ -1,0 +1,30 @@
+{
+  "@id": "synapse-route",
+  "match": [
+    {
+      "host": [
+        "{{ .Domain }}"
+      ]
+    }
+  ],
+  "handle": [
+    {
+      "handler": "subroute",
+      "routes": [
+        {
+          "handle": [
+            {
+              "handler": "reverse_proxy",
+              "upstreams": [
+                {
+                  "dial": "{{ .InstanceID }}:9000"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "terminal": true
+}

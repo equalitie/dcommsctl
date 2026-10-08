@@ -19,6 +19,8 @@ services:
       - PUBLIC_PROTOCOL=http
     volumes:
       - dawa_storage:/rails/storage
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       proxy:
         aliases:

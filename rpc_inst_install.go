@@ -154,6 +154,90 @@ func (app *GlobalState) rpcInstanceInstall(ctx context.Context, args InstanceIns
 				AdminPass:    adminPass,
 			}, nil
 		}
+	case "cryptpad":
+		{
+			adminPass := "test_pass"
+			config := InstanceGenericConfig{
+				SSOIssuerURI: app.systemCfg.SSODomain,
+				Domain:       args.DomainName,
+			}
+
+			instanceDir, err := genericInst(ctx, applicationID, app.systemCfg.InstancesDir, config)
+			if err != nil {
+				return InstanceInstallResult{}, err
+			}
+
+			instanceID := filepath.Base(instanceDir)
+			lockFilePath := path.Join(instanceDir, ".job.lock")
+
+			if err := jobTryToLockFile(lockFilePath); err != nil {
+				return InstanceInstallResult{}, fmt.Errorf("The job is in progress")
+			}
+
+			cmd := exec.CommandContext(app.jobsManager.ctx, path.Join(app.systemCfg.AppsDir, applicationID, "install.sh"))
+			cmd.Dir = instanceDir
+			cmd.Env = []string{
+				"APP_DIR=" + instanceDir,
+				"OAUTH_CLIENT_ID=" + clientID,
+				"OAUTH_CLIENT_SECRET=" + clientSecret,
+			}
+
+			jobID, err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, cmd)
+			if err != nil {
+				return InstanceInstallResult{}, err
+			}
+
+			return InstanceInstallResult{
+				JobID:        jobID,
+				ID:           instanceID,
+				ClientID:     clientID,
+				ClientSecret: clientSecret,
+				AdminLogin:   "root",
+				AdminPass:    adminPass,
+			}, nil
+		}
+	case "synapse":
+		{
+			adminPass := "test_pass"
+			config := InstanceGenericConfig{
+				SSOIssuerURI: app.systemCfg.SSODomain,
+				Domain:       args.DomainName,
+			}
+
+			instanceDir, err := genericInst(ctx, applicationID, app.systemCfg.InstancesDir, config)
+			if err != nil {
+				return InstanceInstallResult{}, err
+			}
+
+			instanceID := filepath.Base(instanceDir)
+			lockFilePath := path.Join(instanceDir, ".job.lock")
+
+			if err := jobTryToLockFile(lockFilePath); err != nil {
+				return InstanceInstallResult{}, fmt.Errorf("The job is in progress")
+			}
+
+			cmd := exec.CommandContext(app.jobsManager.ctx, path.Join(app.systemCfg.AppsDir, applicationID, "install.sh"))
+			cmd.Dir = instanceDir
+			cmd.Env = []string{
+				"APP_DIR=" + instanceDir,
+				"OAUTH_CLIENT_ID=" + clientID,
+				"OAUTH_CLIENT_SECRET=" + clientSecret,
+			}
+
+			jobID, err := app.jobsManager.startExec(ctx, instanceID, lockFilePath, jobType, cmd)
+			if err != nil {
+				return InstanceInstallResult{}, err
+			}
+
+			return InstanceInstallResult{
+				JobID:        jobID,
+				ID:           instanceID,
+				ClientID:     clientID,
+				ClientSecret: clientSecret,
+				AdminLogin:   "root",
+				AdminPass:    adminPass,
+			}, nil
+		}
 	case "dawa":
 		{
 			config := DawaConfig{

@@ -81,6 +81,48 @@ func instanceCreate(instancesDir string, instanceName string) (string, error) {
 	return pathToInst, nil
 }
 
+func genericInst(ctx context.Context, appName, instancesDir string, config InstanceGenericConfig) (string, error) {
+	pathToApp := path.Join("conf_tmpl", appName)
+	pathToInst, err := instanceCreate(instancesDir, appName)
+	if err != nil {
+		return "", err
+	}
+
+	instanceID := filepath.Base(pathToInst)
+
+	config.InstanceID = instanceID
+
+	if err := writeFileTemplate(
+		path.Join(pathToApp, "docker-compose.tmpl.yml"),
+		path.Join(pathToInst, "docker-compose.yml"),
+		&config,
+	); err != nil {
+		return "", err
+	}
+
+	if err := writeFileTemplate(
+		path.Join(pathToApp, "env.tmpl"),
+		path.Join(pathToInst, ".env"),
+		&config,
+	); err != nil {
+		return "", err
+	}
+
+	if err := writeFileTemplate(
+		path.Join(pathToApp, "caddy-route.tmpl.json"),
+		path.Join(pathToInst, "caddy-route.json"),
+		&config,
+	); err != nil {
+		return "", err
+	}
+
+	if err := caddyExportConfig(ctx, instancesDir); err != nil {
+		return "", err
+	}
+
+	return pathToInst, nil
+}
+
 func portRandom() (port int) {
 	for {
 		port = rand.IntN(9999-1024) + 1024
@@ -194,9 +236,10 @@ func (app *GlobalState) initApps(ctx context.Context) error {
 
 // Installable applications, in catalog order. Also the allowlist for apps/get.
 var appIDs = []string{
+	"synapse",
+	"cryptpad",
 	"peertube",
 	"mastodon",
-	"dawa",
 }
 
 func main() {

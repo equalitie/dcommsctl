@@ -255,8 +255,6 @@ func (m *JobManager) startExec(ctx context.Context, instanceID, lockFilePath, jo
 		return err
 	}
 
-	fmt.Println("starting", jobType)
-
 	if err := cmd.Start(); err != nil {
 		logFile.Close()
 		os.Remove(logFilePath)

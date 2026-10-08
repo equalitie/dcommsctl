@@ -1,5 +1,5 @@
 {
-    "id": "peertube",
-    "name": "Peertube",
+    "id": "synapse",
+    "name": "Synapse Matrix Server",
     "redirect_uri": "/tmp_redirect"
 }
