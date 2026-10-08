@@ -7,6 +7,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+
+	"github.com/joho/godotenv"
 )
 
 type InstanceGenericConfig struct {
@@ -17,6 +19,8 @@ type InstanceGenericConfig struct {
 	Domain       string
 	OnionDomain  string
 	Version      string
+	// we support ports via that for now
+	Env map[string]string
 }
 
 func instanceGenID() string {
@@ -47,7 +51,7 @@ func InstanceCreate(instancesDir string, instanceName string) (string, error) {
 	return pathToInst, nil
 }
 
-func GenericInst(appName, instancesDir string, config InstanceGenericConfig) (string, error) {
+func InstanceSetup(appName, instancesDir string, config InstanceGenericConfig) (string, error) {
 	pathToApp := path.Join("conf_tmpl", appName)
 	pathToInst, err := InstanceCreate(instancesDir, appName)
 	if err != nil {
@@ -66,14 +70,31 @@ func GenericInst(appName, instancesDir string, config InstanceGenericConfig) (st
 		return "", err
 	}
 
+	envFilePath := path.Join(pathToInst, ".env")
+
 	if err := WriteFileTemplate(
 		path.Join(pathToApp, "env.tmpl"),
-		path.Join(pathToInst, ".env"),
+		envFilePath,
 		&config,
 	); err != nil {
 		return "", err
 	}
 
+	appendEnv, err := godotenv.Marshal(config.Env)
+	if err != nil {
+		return "", err
+	}
+
+	f, err := os.OpenFile(envFilePath, os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	// Leading newline handles files without a trailing newline.
+	if _, err := f.WriteString("\n" + appendEnv + "\n"); err != nil {
+		return "", err
+	}
 	if err := WriteFileTemplate(
 		path.Join(pathToApp, "caddy-route.tmpl.json"),
 		path.Join(pathToInst, "caddy-route.json"),

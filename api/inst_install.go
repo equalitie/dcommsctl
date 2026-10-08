@@ -410,57 +410,6 @@ func decodeValue(value any, target any) error {
 	return decoder.Decode(target)
 }
 
-type MastodonConfig struct {
-	InstanceGenericConfig
-	PortStreaming int
-	PortWebUI     int
-}
-
-func mastodonCreateInstance(ctx context.Context, instancesDir string, config MastodonConfig) (string, error) {
-	if config.Domain == "" {
-		return "", fmt.Errorf("Mastodon instance requires you to specify a domain")
-	}
-	// FIXME: we need to figure out the strategy for that. we should allow to bind the ports that are already bound if we want to swap instances but we also need a way to update those ports if we used wrong ones by mistake
-	if !tools.PortIsBindable(config.PortWebUI) {
-		return "", fmt.Errorf("Mastodon: port is already bound: %d", config.PortWebUI)
-	}
-	if !tools.PortIsBindable(config.PortStreaming) {
-		return "", fmt.Errorf("Mastodon: port is already bound: %d", config.PortStreaming)
-	}
-	pathToApp := path.Join("conf_tmpl", "mastodon")
-
-	pathToInst, err := inst.InstanceCreate(instancesDir, "mastodon")
-	if err != nil {
-		return "", err
-	}
-
-	if err := inst.WriteFileTemplate(
-		path.Join(pathToApp, "docker-compose.tmpl.yml"),
-		path.Join(pathToInst, "docker-compose.yml"),
-		&config,
-	); err != nil {
-		return "", err
-	}
-
-	if err := inst.WriteFileTemplate(
-		path.Join(pathToApp, "env.tmpl"),
-		path.Join(pathToInst, ".env"),
-		&config,
-	); err != nil {
-		return "", err
-	}
-
-	if err := inst.WriteFileTemplate(
-		path.Join(pathToApp, "caddy-route.tmpl.json"),
-		path.Join(pathToInst, "caddy-route.json"),
-		&config,
-	); err != nil {
-		return "", err
-	}
-
-	return pathToInst, nil
-}
-
 type DawaConfig struct {
 	Domain       string
 	PortOut      int
@@ -550,72 +499,6 @@ func dawaCreateInstance(ctx context.Context, instancesDir string, config DawaCon
 	return pathToInst, nil
 }
 
-type AdminConfig struct {
-	Email    string
-	Password string
-}
-
-type DbConfig struct {
-	Password string
-}
-
-type PeertubeConfig struct {
-	InstanceGenericConfig
-	PortRTMP  int
-	PortWebUI int
-	Db        DbConfig
-	Admin     AdminConfig
-}
-
-func peertubeCreateInstance(ctx context.Context, instancesDir string, config PeertubeConfig) (string, error) {
-	if !tools.PortIsBindable(config.PortRTMP) {
-		return "", fmt.Errorf("Peertube: port is already bound: %d", config.PortRTMP)
-	}
-	if !tools.PortIsBindable(config.PortWebUI) {
-		return "", fmt.Errorf("Peertube: port is already bound: %d", config.PortWebUI)
-	}
-
-	pathToApp := path.Join("conf_tmpl", "peertube")
-	pathToInst, err := inst.InstanceCreate(instancesDir, "peertube")
-	if err != nil {
-		return "", err
-	}
-
-	instanceID := filepath.Base(pathToInst)
-
-	config.InstanceID = instanceID
-
-	if err := inst.WriteFileTemplate(
-		path.Join(pathToApp, "docker-compose.tmpl.yml"),
-		path.Join(pathToInst, "docker-compose.yml"),
-		&config,
-	); err != nil {
-		return "", err
-	}
-
-	if err := inst.WriteFileTemplate(
-		path.Join(pathToApp, "env.tmpl"),
-		path.Join(pathToInst, ".env"),
-		&config,
-	); err != nil {
-		return "", err
-	}
-
-	if err := inst.WriteFileTemplate(
-		path.Join(pathToApp, "caddy-route.tmpl.json"),
-		path.Join(pathToInst, "caddy-route.json"),
-		&config,
-	); err != nil {
-		return "", err
-	}
-
-	if err := caddyExportConfig(ctx, instancesDir); err != nil {
-		return "", err
-	}
-
-	return pathToInst, nil
-}
-
 func (app *GlobalState) InstanceInstall(ctx context.Context, args InstanceInstallArgs) (InstanceInstallResult, error) {
 	applicationID := args.AppName
 	jobType := "install"
@@ -646,15 +529,15 @@ func (app *GlobalState) InstanceInstall(ctx context.Context, args InstanceInstal
 		}
 	case "mastodon":
 		{
-			config := MastodonConfig{
-				SSOIssuerURI:  app.SystemCfg.SSODomain,
-				Domain:        args.DomainName,
-				PortWebUI:     tools.PortRandom(), // 3001,
-				PortStreaming: tools.PortRandom(), // 4000,
-				Version:       "v4.5",
+			config := inst.InstanceGenericConfig{
+				SSOIssuerURI: app.SystemCfg.SSODomain,
+				Domain:       args.DomainName,
+				Version:      "v4.5",
+
+				Env: map[string]string{},
 			}
 
-			instanceDir, err := mastodonCreateInstance(ctx, app.SystemCfg.InstancesDir, config)
+			instanceDir, err := inst.InstanceSetup("mastodon", app.SystemCfg.InstancesDir, config)
 			if err != nil {
 				return InstanceInstallResult{}, err
 			}
@@ -666,7 +549,6 @@ func (app *GlobalState) InstanceInstall(ctx context.Context, args InstanceInstal
 				return InstanceInstallResult{}, fmt.Errorf("The job is in progress")
 			}
 
-			pass := "test_pass"
 			cmd := exec.CommandContext(app.JobsManager.Context(), path.Join(app.SystemCfg.AppsDir, "mastodon", "install.sh"))
 			cmd.Dir = instanceDir
 			cmd.Env = []string{
@@ -684,26 +566,21 @@ func (app *GlobalState) InstanceInstall(ctx context.Context, args InstanceInstal
 				ClientID:     clientID,
 				ClientSecret: clientSecret,
 				AdminLogin:   "root",
-				AdminPass:    pass,
+				AdminPass:    "",
 			}, nil
 		}
 	case "peertube":
 		{
-			adminPass := "test_pass"
-			config := PeertubeConfig{
+			config := inst.InstanceGenericConfig{
 				SSOIssuerURI: app.SystemCfg.SSODomain,
 				Domain:       args.DomainName,
-				PortRTMP:     tools.PortRandom(), // 1935,
-				PortWebUI:    tools.PortRandom(), // 9090,
-				Db: DbConfig{
-					Password: "",
-				},
-				Admin: AdminConfig{
-					Password: adminPass,
+				Env: map[string]string{
+					"PORT_RMTP":   fmt.Sprintf("%d", tools.PortRandom()),
+					"PORT_WEB_UI": fmt.Sprintf("%d", tools.PortRandom()),
 				},
 			}
 
-			instanceDir, err := peertubeCreateInstance(ctx, app.SystemCfg.InstancesDir, config)
+			instanceDir, err := inst.InstanceSetup("peertube", app.SystemCfg.InstancesDir, config)
 			if err != nil {
 				return InstanceInstallResult{}, err
 			}
@@ -734,18 +611,17 @@ func (app *GlobalState) InstanceInstall(ctx context.Context, args InstanceInstal
 				ClientID:     clientID,
 				ClientSecret: clientSecret,
 				AdminLogin:   "root",
-				AdminPass:    adminPass,
+				AdminPass:    "test_pass",
 			}, nil
 		}
 	case "cryptpad":
 		{
-			adminPass := "test_pass"
 			config := inst.InstanceGenericConfig{
 				SSOIssuerURI: app.SystemCfg.SSODomain,
 				Domain:       args.DomainName,
 			}
 
-			instanceDir, err := inst.GenericInst(applicationID, app.SystemCfg.InstancesDir, config)
+			instanceDir, err := inst.InstanceSetup(applicationID, app.SystemCfg.InstancesDir, config)
 			if err != nil {
 				return InstanceInstallResult{}, err
 			}
@@ -776,7 +652,7 @@ func (app *GlobalState) InstanceInstall(ctx context.Context, args InstanceInstal
 				ClientID:     clientID,
 				ClientSecret: clientSecret,
 				AdminLogin:   "root",
-				AdminPass:    adminPass,
+				AdminPass:    "",
 			}, nil
 		}
 	case "synapse":
@@ -787,7 +663,7 @@ func (app *GlobalState) InstanceInstall(ctx context.Context, args InstanceInstal
 				Domain:       args.DomainName,
 			}
 
-			instanceDir, err := inst.GenericInst(applicationID, app.SystemCfg.InstancesDir, config)
+			instanceDir, err := inst.InstanceSetup(applicationID, app.SystemCfg.InstancesDir, config)
 			if err != nil {
 				return InstanceInstallResult{}, err
 			}
