@@ -11,7 +11,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"eq/dcommsctl/internal/log"
@@ -151,13 +150,14 @@ func DropRoute(ctx context.Context, instanceID string) error {
 	return nil
 }
 
-func InstanceSetup(instancesDir string, config CaddyConfig) (string, error) {
+func InstanceSetup(applicationsDir, instancesDir string, config CaddyConfig) (string, error) {
 	if config.Domain == "" {
 		config.Domain = "localhost"
 	}
 	if config.Port == 0 {
 		config.Port = 8000
 	}
+	pathToApp := path.Join(applicationsDir, "caddy")
 	pathToInst := path.Join(instancesDir, "caddy")
 
 	if caddyInstancePath, err := caddyInstancePath(instancesDir); caddyInstancePath != "" {
@@ -166,7 +166,7 @@ func InstanceSetup(instancesDir string, config CaddyConfig) (string, error) {
 		return "", err
 	}
 
-	tmpl, err := template.ParseFiles("./conf_tmpl/caddy/docker-compose.tmpl.yml")
+	tmpl, err := template.ParseFiles(path.Join(pathToApp, "docker-compose.tmpl.yml"))
 	if err != nil {
 		return "", err
 	}
@@ -191,7 +191,7 @@ func InstanceSetup(instancesDir string, config CaddyConfig) (string, error) {
 		return "", err
 	}
 
-	envTmpl, err := template.ParseFiles("./conf_tmpl/caddy/Caddyfile.tmpl")
+	envTmpl, err := template.ParseFiles(path.Join(pathToApp, "Caddyfile.tmpl"))
 	if err != nil {
 		return "", err
 	}
@@ -248,138 +248,4 @@ func ExportConfig(ctx context.Context, instancesDir string) error {
 	}
 
 	return nil
-}
-
-func caddyEnsureTLS(
-	ctx context.Context,
-	hostname, admin string,
-) error {
-	admin = strings.TrimRight(admin, "/")
-
-	for attempt := 0; attempt < 5; attempt++ {
-		body, etag, err := CaddySendRequest(
-			ctx, admin+"/config/apps",
-			http.MethodGet, "", nil,
-		)
-		if err != nil {
-			return err
-		}
-		if etag == "" {
-			return fmt.Errorf("Caddy response has no ETag")
-		}
-
-		var apps struct {
-			TLS map[string]any `json:"tls"`
-		}
-		decoder := json.NewDecoder(bytes.NewReader(body))
-		decoder.UseNumber()
-		if err := decoder.Decode(&apps); err != nil {
-			return err
-		}
-
-		tls := apps.TLS
-		if tls == nil {
-			tls = make(map[string]any)
-		}
-		before, err := json.Marshal(tls)
-		if err != nil {
-			return err
-		}
-
-		certificates, err := ensureObject(tls, "certificates")
-		if err != nil {
-			return err
-		}
-
-		var names []string
-		if err := decodeValue(certificates["automate"], &names); err != nil {
-			return fmt.Errorf("certificates.automate: %w", err)
-		}
-
-		seen := make(map[string]bool)
-		unique := make([]string, 0, len(names)+1)
-		for _, name := range append(names, hostname) {
-			if !seen[name] {
-				seen[name] = true
-				unique = append(unique, name)
-			}
-		}
-		certificates["automate"] = unique
-
-		automation, err := ensureObject(tls, "automation")
-		if err != nil {
-			return err
-		}
-
-		var policies []map[string]any
-		if err := decodeValue(automation["policies"], &policies); err != nil {
-			return fmt.Errorf("automation.policies: %w", err)
-		}
-
-		covered := false
-		for _, policy := range policies {
-			var subjects []string
-			if err := decodeValue(policy["subjects"], &subjects); err != nil {
-				return fmt.Errorf("policy subjects: %w", err)
-			}
-			for _, subject := range subjects {
-				if subject == hostname {
-					covered = true
-				}
-			}
-		}
-
-		if !covered {
-			policy := map[string]any{
-				"subjects": []string{hostname},
-				"issuers": []map[string]string{
-					{"module": "internal"},
-				},
-			}
-			policies = append([]map[string]any{policy}, policies...)
-		}
-		automation["policies"] = policies
-
-		after, err := json.Marshal(tls)
-		if err != nil {
-			return err
-		}
-		if bytes.Equal(before, after) {
-			return nil
-		}
-
-		body, _, err = CaddySendRequest(
-			ctx, admin+"/config/apps/tls",
-			http.MethodPost, etag, after,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	return fmt.Errorf("Caddy config kept changing; retry later")
-}
-
-func ensureObject(parent map[string]any, key string) (map[string]any, error) {
-	if parent[key] == nil {
-		parent[key] = make(map[string]any)
-	}
-	obj, ok := parent[key].(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("%s must be a JSON object", key)
-	}
-	return obj, nil
-}
-
-func decodeValue(value any, target any) error {
-	if value == nil {
-		return nil
-	}
-	data, err := json.Marshal(value)
-	if err != nil {
-		return err
-	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
-	return decoder.Decode(target)
 }

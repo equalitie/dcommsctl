@@ -143,7 +143,7 @@ func (app *GlobalState) InstanceInstall(ctx context.Context, args InstanceInstal
 				Domain: args.DomainName,
 				Port:   8000,
 			}
-			instanceDir, err := proxy.InstanceSetup(app.SystemCfg.InstancesDir, config)
+			instanceDir, err := proxy.InstanceSetup(app.SystemCfg.AppsDir, app.SystemCfg.InstancesDir, config)
 			if err != nil {
 				return InstanceInstallResult{}, err
 			}
