@@ -1,6 +1,5 @@
-
 {
-  "@id": "mastodon-route",
+  "@id": "{{ .InstanceID }}-route",
   "match": [
     {
       "host": [
@@ -18,7 +17,7 @@
               "handler": "reverse_proxy",
               "upstreams": [
                 {
-                  "dial": "peertube:{{ .PortWebUI }}"
+                  "dial": "{{ .InstanceID }}:3000"
                 }
               ]
             }

@@ -8,6 +8,7 @@ import (
 	"path"
 
 	"eq/dcommsctl/internal/jobs"
+	"eq/dcommsctl/internal/proxy"
 )
 
 type InstanceExposeArgs struct {
@@ -42,11 +43,11 @@ func (app *GlobalState) InstanceExpose(ctx context.Context, args InstanceExposeA
 	caddyRouteJSON, err := os.ReadFile(caddyRouteFilePath)
 
 	endpoint := "http://localhost:2019/config/apps/http/servers/srv0/routes"
-	if _, _, err := caddySendRequest(ctx, endpoint, http.MethodPost, "", caddyRouteJSON); err != nil {
+	if _, _, err := proxy.CaddySendRequest(ctx, endpoint, http.MethodPost, "", caddyRouteJSON); err != nil {
 		return InstanceExposeResult{}, err
 	}
 
-	if err := caddyExportConfig(ctx, app.SystemCfg.InstancesDir); err != nil {
+	if err := proxy.ExportConfig(ctx, app.SystemCfg.InstancesDir); err != nil {
 		return InstanceExposeResult{}, err
 	}
 

@@ -1,5 +1,5 @@
 {
-  "@id": "peertube-route",
+  "@id": "{{ .InstanceID }}-route",
   "match": [
     {
       "host": [

@@ -28,7 +28,7 @@ services:
       - "cd /opt/mastodon && /usr/bin/tini -- bundle exec rails server"
     env_file: ./.env
     ports:
-      - "127.0.0.1:3000:{{ .PortWebUI }}"
+      - "127.0.0.1:${PORT_WEB_UI}:3000"
     command: bash -c "rm -f /mastodon/tmp/pids/server.pid; bundle exec rails s -p 3000"
     depends_on:
       - mastodon-db
@@ -50,7 +50,7 @@ services:
         ]
     env_file: ./.env
     ports:
-      - "127.0.0.1:4000:{{ .PortStreaming }}"
+      - "127.0.0.1:${PORT_STREAMING}:4000"
     command: node ./streaming
     depends_on:
       - mastodon-db
