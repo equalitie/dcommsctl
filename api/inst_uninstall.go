@@ -11,6 +11,7 @@ import (
 
 type InstanceUninstallArgs struct {
 	ID string `json:"id"`
+	// KeepLogs bool `json:"keep_logs"`
 }
 type InstanceUninstallResult struct {
 	JobID string `json:"job_id"`
@@ -18,8 +19,6 @@ type InstanceUninstallResult struct {
 
 func (app *GlobalState) InstanceUninstall(ctx context.Context, args InstanceUninstallArgs) (InstanceUninstallResult, error) {
 	jobType := "uninstall"
-
-	jobID := jobs.MakeJobID(jobType)
 
 	instanceID := args.ID
 
