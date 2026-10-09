@@ -32,6 +32,7 @@ func (app *GlobalState) JobLog(ctx context.Context, args JobLogArgs) (JobLogResu
 	}
 
 	r.Log = string(l.LogChunk)
+	r.NextOffset = l.NextOffset
 	r.Done = l.Finished
 
 	return r, nil
