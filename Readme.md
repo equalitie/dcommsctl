@@ -49,3 +49,23 @@ LOG_LEVEL=debug go run ./cmd/
 
 RPC request and response bodies appear under a `json` key. Requests that carry no params
 log no `json` key at all, which distinguishes them from an explicit `{}`.
+
+# Debugging
+
+Check Caddy config:
+
+```sh
+# entire config
+curl -s http://localhost:2019/config/ | jq
+# srv0 routes (https)
+curl -s http://localhost:2019/config/apps/http/servers/srv0/routes | jq
+# srv1 routes (http)
+curl -s http://localhost:2019/config/apps/http/servers/srv0/routes | jq
+```
+
+Check an app is being routed through caddy:
+
+```sh
+curl -sv http://APP_INST_DOMAIN:CADDY_PORT/ -o /dev/null
+curl -sv http://testapp.localhost:8000/ -o /dev/null
+```
