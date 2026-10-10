@@ -327,6 +327,41 @@ func (app *GlobalState) InstanceInstall(ctx context.Context, args InstanceInstal
 				AdminPass:    adminPass,
 			}, nil
 		}
+	case "ersatz":
+		{
+			config := inst.InstanceGenericConfig{
+				Domain: args.DomainName,
+			}
+
+			instanceDir, err := inst.InstanceSetup(applicationID, app.SystemCfg.InstancesDir, config)
+			if err != nil {
+				return InstanceInstallResult{}, err
+			}
+
+			instanceID := filepath.Base(instanceDir)
+			lockFilePath := path.Join(instanceDir, ".job.lock")
+
+			if err := jobs.JobTryToLockFile(lockFilePath); err != nil {
+				return InstanceInstallResult{}, fmt.Errorf("The job is in progress")
+			}
+
+			cmd := exec.CommandContext(app.JobsManager.Context(), path.Join(app.SystemCfg.AppsDir, applicationID, "install.sh"))
+			cmd.Dir = instanceDir
+			cmd.Env = []string{
+				"APP_DIR=" + instanceDir,
+			}
+
+			jobID, err := app.JobsManager.StartExec(ctx, instanceID, lockFilePath, jobType, cmd)
+			if err != nil {
+				return InstanceInstallResult{}, err
+			}
+
+			return InstanceInstallResult{
+				JobID:    jobID,
+				ID:       instanceID,
+				ClientID: clientID,
+			}, nil
+		}
 	case "dawa":
 		{
 			config := DawaConfig{

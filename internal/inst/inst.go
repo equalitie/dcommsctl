@@ -129,6 +129,7 @@ var AppIDs = []string{
 	"cryptpad",
 	"peertube",
 	"mastodon",
+	"ersatz",
 }
 
 var instanceNames = []string{

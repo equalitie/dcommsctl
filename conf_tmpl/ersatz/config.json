@@ -1,0 +1,12 @@
+{
+    "id": "ersatz",
+    "name": "Ersatz",
+    "version": "latest",
+    "redirect_uri": "",
+    "description": "A mock app that does nothing, for testing container deployments.",
+    "long_description": "Ersatz is a mock application used to test the deployment machinery itself.\n\nIt resolves its configuration from four sources in a fixed precedence order -- a configuration file, plain environment variables, environment variables that point at files, and command line flags -- and its index page reports every setting it found together with the source it came from. That makes it possible to confirm at a glance that a value was delivered by the route intended, rather than merely that it arrived.\n\nIt has no database and stores nothing, so it can be installed, stopped, started, and removed without side effects. It is a development and testing tool, not something to run in production.",
+    "upstream_url": "https://gitlab.equalit.ie/dcomms/ersatz",
+    "definition_url": "https://gitlab.equalit.ie/dcomms/dcommsctl/-/tree/main/conf_tmpl/ersatz",
+    "updated_at": "2026-10-09T00:00:00+02:00",
+    "releases": []
+}

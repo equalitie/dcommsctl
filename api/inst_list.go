@@ -36,6 +36,7 @@ var domainEnvKeys = map[string]string{
 	"mastodon": "LOCAL_DOMAIN",
 	"cryptpad": "SITE_DOMAIN",
 	"synapse":  "SITE_DOMAIN",
+	"ersatz":   "DOMAIN",
 }
 
 // instanceApp recovers the app an instance was created from out of its

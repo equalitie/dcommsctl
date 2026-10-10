@@ -1,0 +1,30 @@
+{
+  "@id": "{{ .InstanceID }}-route",
+  "match": [
+    {
+      "host": [
+        "{{ .Domain }}"
+      ]
+    }
+  ],
+  "handle": [
+    {
+      "handler": "subroute",
+      "routes": [
+        {
+          "handle": [
+            {
+              "handler": "reverse_proxy",
+              "upstreams": [
+                {
+                  "dial": "{{ .InstanceID }}:8080"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "terminal": true
+}

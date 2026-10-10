@@ -1,0 +1,26 @@
+services:
+  ersatz:
+    image: registry.dcomms.org/dcomms/ersatz:latest
+    container_name: "{{ .InstanceID }}-ersatz"
+    restart: unless-stopped
+    env_file: ./.env
+    volumes:
+      - ./ersatz.yml:/etc/ersatz.yml:ro
+    networks:
+      proxy:
+        aliases:
+          - {{ .InstanceID }}
+    environment:
+      - IMG_PATH
+      - BG_COLOR
+      - MESSAGE
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/ersatz", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 2s
+
+networks:
+  proxy:
+    external: true
