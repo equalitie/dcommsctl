@@ -25,7 +25,7 @@ func (app *GlobalState) InstanceStop(ctx context.Context, args InstanceStopArgs)
 	pathToInst := path.Join(app.SystemCfg.InstancesDir, instanceID)
 	lockFilePath := path.Join(pathToInst, ".job.lock")
 
-	if err := jobs.JobTryToLockFile(path.Join(pathToInst, lockFilePath)); err != nil {
+	if err := jobs.JobTryToLockFile(lockFilePath); err != nil {
 		return InstanceStopResult{}, fmt.Errorf("The job is in progress")
 	}
 

@@ -24,7 +24,7 @@ func (app *GlobalState) InstanceUpgrade(ctx context.Context, args InstanceUpgrad
 	instanceDir := path.Join(app.SystemCfg.InstancesDir, instanceID)
 	lockFilePath := path.Join(instanceDir, ".job.lock")
 
-	if err := jobs.JobTryToLockFile(path.Join(instanceDir, lockFilePath)); err != nil {
+	if err := jobs.JobTryToLockFile(lockFilePath); err != nil {
 		return InstanceUpgradeResult{}, fmt.Errorf("The job is in progress")
 	}
 
