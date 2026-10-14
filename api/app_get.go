@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"slices"
 
-	"eq/dcommsctl/internal/inst"
+	"eq/dcommsctl/internal/application"
 )
 
 type ApplicationGetArgs struct {
@@ -15,7 +15,7 @@ type ApplicationGetArgs struct {
 // One catalog entry with the detail apps/list omits. The id is checked against appIDs
 // before it reaches the filesystem, so it cannot walk out of conf_tmpl.
 func ApplicationGet(ctx context.Context, args ApplicationGetArgs) (ApplicationDetail, error) {
-	if !slices.Contains(inst.AppIDs, args.Id) {
+	if !slices.Contains(application.AppIDs, args.Id) {
 		return ApplicationDetail{}, fmt.Errorf("unknown application: %s", args.Id)
 	}
 

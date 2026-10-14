@@ -8,5 +8,13 @@
     "upstream_url": "https://joinpeertube.org",
     "definition_url": "https://gitlab.equalit.ie/dcomms/dcommsctl/-/tree/main/conf_tmpl/peertube",
     "updated_at": "2026-09-14T23:14:25+02:00",
+    "variables": {
+        "PORT_RMTP": {
+            "type": "port"
+        },
+        "PORT_WEB_UI": {
+            "type": "port"
+        }
+    },
     "releases": []
 }

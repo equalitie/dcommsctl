@@ -18,10 +18,10 @@ services:
       - proxy
     ports:
       - target: 80
-        published: {{ .Port }}
+        published: {{ .HTTPPort }}
         protocol: tcp
       - target: 443
-        published: 3443
+        published: {{ .HTTPSPort }}
         protocol: tcp
       - target: 8448
         published: 8448

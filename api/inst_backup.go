@@ -28,7 +28,7 @@ func (app *GlobalState) InstanceBackup(ctx context.Context, args InstanceBackupA
 	pathToInst := path.Join(app.SystemCfg.InstancesDir, instanceID)
 	lockFilePath := path.Join(pathToInst, ".job.lock")
 
-	instanceDirParts := strings.Split(path.Base(pathToInst), "-")
+	instanceDirParts := strings.Split(instanceID, "-")
 
 	appName := instanceDirParts[0]
 	pathToAppConfig := path.Join(app.SystemCfg.AppsDir, appName, "config.json")

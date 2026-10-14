@@ -19,8 +19,9 @@ import (
 // caddy is a proxy for other services so it's basically a single instance service
 
 type CaddyConfig struct {
-	Domain string
-	Port   int
+	Domain    string
+	HTTPPort  int
+	HTTPSPort int
 	// Serve everything on :80 without TLS; ACME cannot work behind the 8000/3443 mapping.
 	PlainHTTP bool
 }
@@ -148,7 +149,7 @@ func caddyInstancePath(instancesDir string) (string, error) {
 	return pathToInst, nil
 }
 
-func InstanceSetup(applicationsDir, instancesDir string, config CaddyConfig) (string, error) {
+func InstanceSetup(applicationsDir, instancesDir string, config ProxyConfig) (string, error) {
 	pathToApp := path.Join(applicationsDir, "caddy")
 	pathToInst := path.Join(instancesDir, "caddy")
 

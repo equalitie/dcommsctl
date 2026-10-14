@@ -107,7 +107,14 @@
     "name": "inst/install",
     "params": {
       "domain": "string",
-      "name": "string"
+      "name": "string",
+      "variables": {
+        "type": "object",
+        "values": {
+          "items": "integer",
+          "type": "array"
+        }
+      }
     },
     "result": {
       "admin_login": "string",

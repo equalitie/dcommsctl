@@ -6,7 +6,7 @@ import (
 	"path"
 	"path/filepath"
 
-	"eq/dcommsctl/internal/inst"
+	"eq/dcommsctl/internal/application"
 )
 
 type BackupsListArgs struct {
@@ -57,7 +57,7 @@ func (app *GlobalState) BackupsList(ctx context.Context, args BackupsListArgs) (
 	filterByApp := appName != ""
 	r := BackupsListResult{Backups: []string{}}
 
-	lookIn := inst.AppIDs
+	lookIn := application.AppIDs
 
 	if filterByApp {
 		lookIn = []string{appName}

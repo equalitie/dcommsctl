@@ -27,27 +27,33 @@ func instanceGenID() string {
 	return instanceNames[rand.IntN(len(instanceNames))]
 }
 
-func InstanceCreate(instancesDir string, instanceName string) (string, error) {
-	instanceID := instanceName + "-" + instanceGenID()
+func InstanceCreate(instancesDir string, appName string) (string, error) {
+	var pathToInst string
 
-	pathToInst := path.Join(instancesDir, instanceID)
-	for {
-		if _, err := os.Stat(pathToInst); err != nil {
-			if os.IsNotExist(err) {
-				break
+	// FIXME: find a better way to specify single-instance apps
+	if appName == "dawa" || appName == "metrics" {
+		pathToInst = path.Join(instancesDir, appName)
+	} else {
+		instanceID := appName + "-" + instanceGenID()
+
+		pathToInst = path.Join(instancesDir, instanceID)
+		for {
+			if _, err := os.Stat(pathToInst); err != nil {
+				if os.IsNotExist(err) {
+					break
+				}
 			}
+
+			instanceID = appName + "-" + instanceGenID()
+			pathToInst = path.Join(instancesDir, instanceID)
 		}
 
-		instanceID = instanceName + "-" + instanceGenID()
-		pathToInst = path.Join(instancesDir, instanceID)
 	}
-
 	folderToCreate := path.Join(pathToInst, "jobs")
 
 	if err := os.MkdirAll(folderToCreate, 0o700); err != nil {
 		return "", fmt.Errorf("create instance dir: %s", err)
 	}
-
 	return pathToInst, nil
 }
 
@@ -58,22 +64,46 @@ func InstanceSetup(appName, instancesDir string, config InstanceGenericConfig) (
 		return "", err
 	}
 
+	// okay, let's just iterate over all files, skip config.json and all .sh files
+
 	instanceID := filepath.Base(pathToInst)
 
 	config.InstanceID = instanceID
 
-	if err := WriteFileTemplate(
-		path.Join(pathToApp, "docker-compose.tmpl.yml"),
-		path.Join(pathToInst, "docker-compose.yml"),
-		&config,
-	); err != nil {
+	excludedFiles := []string{".env", "config.json"}
+
+	appFiles, err := os.ReadDir(pathToApp)
+	if err != nil {
 		return "", err
+	}
+
+	// Exclusions are filenames, without the folder path.
+	skip := make(map[string]struct{}, len(excludedFiles))
+	for _, name := range excludedFiles {
+		skip[name] = struct{}{}
+	}
+
+	for _, entry := range appFiles {
+		name := entry.Name()
+		if entry.IsDir() || filepath.Ext(name) == ".sh" {
+			continue
+		}
+		if _, excluded := skip[name]; excluded {
+			continue
+		}
+		if err := WriteFileTemplate(
+			path.Join(pathToApp, name),
+			path.Join(pathToInst, name),
+			&config,
+		); err != nil {
+			return "", err
+		}
 	}
 
 	envFilePath := path.Join(pathToInst, ".env")
 
 	if err := WriteFileTemplate(
-		path.Join(pathToApp, "env.tmpl"),
+		path.Join(pathToApp, ".env"),
 		envFilePath,
 		&config,
 	); err != nil {
@@ -93,13 +123,6 @@ func InstanceSetup(appName, instancesDir string, config InstanceGenericConfig) (
 
 	// Leading newline handles files without a trailing newline.
 	if _, err := f.WriteString("\n" + appendEnv + "\n"); err != nil {
-		return "", err
-	}
-	if err := WriteFileTemplate(
-		path.Join(pathToApp, "caddy-route.tmpl.json"),
-		path.Join(pathToInst, "caddy-route.json"),
-		&config,
-	); err != nil {
 		return "", err
 	}
 
@@ -122,14 +145,6 @@ func WriteFileTemplate(tmplPath, targetPath string, data any) error {
 	}
 
 	return nil
-}
-
-var AppIDs = []string{
-	"synapse",
-	"cryptpad",
-	"peertube",
-	"mastodon",
-	"ersatz",
 }
 
 var instanceNames = []string{

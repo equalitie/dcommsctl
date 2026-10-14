@@ -7,7 +7,7 @@ import (
 	"os"
 	"path"
 
-	"eq/dcommsctl/internal/inst"
+	"eq/dcommsctl/internal/application"
 	"eq/dcommsctl/internal/log"
 )
 
@@ -72,7 +72,7 @@ func ApplicationsList(ctx context.Context) (ApplicationListResult, error) {
 	r := ApplicationListResult{}
 
 	// Skip definitions that fail to load; one bad file must not fail the whole call.
-	for _, id := range inst.AppIDs {
+	for _, id := range application.AppIDs {
 		app, err := loadAppConfig(id)
 		if err != nil {
 			log.LogInfo("app/list skipping", "app", id, "err", err)

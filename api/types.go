@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"eq/dcommsctl/internal/jobs"
+	"eq/dcommsctl/internal/proxy"
 )
 
 type SystemConfig struct {
@@ -30,6 +31,7 @@ type GlobalState struct {
 	ctx         context.Context
 	SystemCfg   SystemConfig
 	JobsManager *jobs.JobManager
+	ProxyCfg    proxy.ProxyConfig
 }
 
 func NewGlobalState(ctx context.Context) *GlobalState {
