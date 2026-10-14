@@ -11,15 +11,22 @@ services:
         aliases:
           - {{ .InstanceID }}
     environment:
-      - IMG_PATH
-      - BG_COLOR
-      - MESSAGE
+      - ERSATZ_DUMMY_LOG_FREQUENCY
+      - ERSATZ_DUMMY_CPU_LOAD
+      - ERSATZ_IMG_PATH
+      - ERSATZ_BG_COLOR
+      - ERSATZ_MESSAGE
     healthcheck:
       test: ["CMD", "/usr/local/bin/ersatz", "healthcheck"]
       interval: 10s
       timeout: 3s
       retries: 3
       start_period: 2s
+    labels:
+      dc_app: ersatz
+      dc_name: ersatz
+      dc_version: 0.0.1
+      dc_inst: "{{ .InstanceID }}"
 
 networks:
   proxy:
