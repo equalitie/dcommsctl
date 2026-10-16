@@ -140,8 +140,9 @@ func (app *GlobalState) InstanceInstall(ctx context.Context, args InstanceInstal
 	case "caddy":
 		{
 			config := proxy.CaddyConfig{
-				Domain: args.DomainName,
-				Port:   8000,
+				Domain:    args.DomainName,
+				Port:      8000,
+				PlainHTTP: args.DomainName != "localhost",
 			}
 			instanceDir, err := proxy.InstanceSetup(app.SystemCfg.AppsDir, app.SystemCfg.InstancesDir, config)
 			if err != nil {

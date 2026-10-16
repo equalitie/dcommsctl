@@ -21,6 +21,8 @@ import (
 type CaddyConfig struct {
 	Domain string
 	Port   int
+	// Serve everything on :80 without TLS; ACME cannot work behind the 8000/3443 mapping.
+	PlainHTTP bool
 }
 
 type upstream struct {

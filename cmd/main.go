@@ -74,7 +74,7 @@ func initApps(ctx context.Context, app *api.GlobalState) error {
 	// because dawa asks too early to add a route
 
 	// FIXME: get the actual port
-	log.LogInfo("Caddy should be running on port :8000 SSL on port :3443")
+	log.LogInfo("Caddy should be running on port :8000 (SSL on port :3443 for localhost only)")
 
 	if app.SystemCfg.SkipDawa {
 		log.LogInfo("Skipping Dawa initial install")

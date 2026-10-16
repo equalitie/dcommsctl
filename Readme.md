@@ -57,10 +57,10 @@ Check Caddy config:
 ```sh
 # entire config
 curl -s http://localhost:2019/config/ | jq
-# srv0 routes (https)
+# app routes (https on localhost, plain http on :80 for any other DCOMMS_WEB_DOMAIN)
 curl -s http://localhost:2019/config/apps/http/servers/srv0/routes | jq
-# srv1 routes (http)
-curl -s http://localhost:2019/config/apps/http/servers/srv0/routes | jq
+# localhost-only http server
+curl -s http://localhost:2019/config/apps/http/servers/srv1/routes | jq
 ```
 
 Check an app is being routed through caddy:
