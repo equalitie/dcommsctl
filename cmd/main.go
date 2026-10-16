@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -92,6 +93,48 @@ func initApps(ctx context.Context, app *api.GlobalState) error {
 	}
 
 	return nil
+}
+
+// Containers reach dcommsctl at host.docker.internal, which is the default bridge gateway.
+func dockerBridgeGateway(ctx context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	out, err := exec.CommandContext(ctx, "docker", "network", "inspect", "bridge",
+		"--format", "{{range .IPAM.Config}}{{.Gateway}} {{end}}").Output()
+	if err != nil {
+		return "", fmt.Errorf("docker network inspect bridge: %w", err)
+	}
+	for _, field := range strings.Fields(string(out)) {
+		if ip := net.ParseIP(field); ip != nil && ip.To4() != nil {
+			return ip.String(), nil
+		}
+	}
+	return "", fmt.Errorf("the docker bridge network has no IPv4 gateway")
+}
+
+// When bound to loopback, also listen on the docker bridge so Dawa can connect.
+func listenForContainers(ctx context.Context, addr string) net.Listener {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil || !net.ParseIP(host).IsLoopback() {
+		return nil
+	}
+
+	gateway, err := dockerBridgeGateway(ctx)
+	if err != nil {
+		log.LogError("containers cannot reach dcommsctl", "err", err)
+		return nil
+	}
+
+	bridgeAddr := net.JoinHostPort(gateway, port)
+	listener, err := net.Listen("tcp4", bridgeAddr)
+	if err != nil {
+		log.LogError("containers cannot reach dcommsctl", "address", bridgeAddr, "err", err)
+		return nil
+	}
+
+	log.LogInfo("listening for containers", "address", listener.Addr().String())
+	return listener
 }
 
 // Installable applications, in catalog order. Also the allowlist for apps/get.
@@ -190,13 +233,20 @@ func main() {
 
 	log.LogInfo("listening", "address", listener.Addr().String(), "ws_endpoint", listener.Addr().String()+"/ws")
 
-	serverError := make(chan error, 1)
+	listeners := []net.Listener{listener}
+	if l := listenForContainers(rootContext, addr); l != nil {
+		listeners = append(listeners, l)
+	}
 
-	go func() {
-		if err := server.Serve(listener); !errors.Is(err, http.ErrServerClosed) {
-			serverError <- err
-		}
-	}()
+	serverError := make(chan error, len(listeners))
+
+	for _, l := range listeners {
+		go func() {
+			if err := server.Serve(l); !errors.Is(err, http.ErrServerClosed) {
+				serverError <- err
+			}
+		}()
+	}
 
 	select {
 	case err := <-serverError:
