@@ -1,3 +1,4 @@
 .instances/
 .backups/
 .jobs_db.json
+dist/
