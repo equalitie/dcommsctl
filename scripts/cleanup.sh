@@ -70,7 +70,11 @@ for dir in "$root"/*/; do
     fi
 done
 
-rm -rf "$root"
+if (( failed == 0 )); then
+    rm -rf -- "$root"/* || failed=1
+else
+    printf 'Keeping %s because cleanup was incomplete.\n' "$root" >&2
+fi
 
 if (( found == 0 )); then
     printf 'No immediate subfolders containing docker-compose.yml in %s\n' "$root"
