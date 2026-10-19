@@ -8,9 +8,10 @@ import (
 )
 
 type ApplicationConfig struct {
-	LastUpdated string
-	Version     string
-	Variables   map[string]appVariable
+	SingleInstance bool `json:"single_instance"`
+	LastUpdated    string
+	Version        string
+	Variables      map[string]appVariable `json:"variables"`
 }
 
 type appVariable struct {
@@ -113,6 +114,12 @@ func ValidateParamsAgainstConfig(
 	}
 
 	return commonVars, installOnlyVars, nil
+}
+
+var PrivateAppIDS = []string{
+	"dawa",
+	"metrics",
+	"caddy",
 }
 
 var AppIDs = []string{

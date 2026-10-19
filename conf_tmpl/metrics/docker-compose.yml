@@ -114,6 +114,8 @@ services:
 volumes:
   log_storage:
   metrics_storage:
+  # NOTE: this was missing. Was it expected somewhere else?
+  vector_data:
 
 networks:
   metrics:

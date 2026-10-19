@@ -1,0 +1,12 @@
+{
+	"id": "caddy",
+	"single_instance": true,
+    "variables": {
+        "PORT_HTTP": {
+            "type": "port"
+        },
+        "PORT_HTTPS": {
+            "type": "port"
+        }
+    }
+}

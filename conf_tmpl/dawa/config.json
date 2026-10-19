@@ -1,6 +1,7 @@
 {
     "id": "dawa",
     "name": "DAWA",
+    "single_instance": true,
     "version": "0.0.1",
     "redirect_uri": "/tmp_redirect",
     "description": "Web interface for installing and managing dComms applications.",

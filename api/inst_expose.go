@@ -34,13 +34,10 @@ func (app *GlobalState) InstanceExpose(ctx context.Context, args InstanceExposeA
 
 	caddyRouteFilePath := path.Join(pathToInst, "caddy-route.json")
 
-	caddyFile, err := os.OpenFile(caddyRouteFilePath, os.O_RDONLY, 0o644)
+	caddyRouteJSON, err := os.ReadFile(caddyRouteFilePath)
 	if err != nil {
 		return InstanceExposeResult{}, err
 	}
-	defer caddyFile.Close()
-
-	caddyRouteJSON, err := os.ReadFile(caddyRouteFilePath)
 
 	endpoint := "http://localhost:2019/config/apps/http/servers/srv0/routes"
 	if _, _, err := proxy.CaddySendRequest(ctx, endpoint, http.MethodPost, "", caddyRouteJSON); err != nil {

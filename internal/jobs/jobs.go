@@ -19,6 +19,15 @@ import (
 
 // this is a file for handling jobs: whatever client requested us to do and we essentially run it in async mode
 
+// Job state is persisted as a single JSON file: a map from key(instanceID, id) to a record. It
+// exists so that job/status is answerable after a daemon restart, which is also why loading it is
+// not a plain unmarshal -- a daemon that died mid-job leaves records that claim work is still in
+// progress, and those have to be reconciled before the file is believed.
+//
+// The paths inside a record are stored relative to pathsRoot rather than absolutely, so a state
+// file survives its tree being moved or copied. absPath and relPath are the two directions of that
+// conversion.
+
 const ScriptGracePeriod = 20 * time.Second
 
 type JobID string
@@ -113,30 +122,6 @@ func NewJobManager(ctx context.Context) *JobManager {
 
 func (m *JobManager) Context() context.Context    { return m.ctx }
 func (m *JobManager) Jobs() map[string]*JobRecord { return m.jobs }
-
-func (m *JobManager) LoadJobs() error {
-	data, err := os.ReadFile(m.JobsDBpath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			// did not find the file, move on
-			return nil
-		}
-		return err
-	}
-
-	var tmp map[string]*JobRecord
-
-	err = json.Unmarshal(data, &tmp)
-	if err != nil {
-		return fmt.Errorf("jobs_db file unmarshal error %s. Possibly old format", err)
-	}
-
-	m.mu.Lock()
-	m.jobs = tmp
-	m.mu.Unlock()
-
-	return nil
-}
 
 // StatusByID looks up a job by its bare id (the value handed back to clients as
 // job_id), independent of which instance it belongs to. The jobs map is keyed
@@ -238,13 +223,32 @@ func (m *JobManager) update(instanceID, id string, fn func(rec *JobRecord)) bool
 }
 
 func (m *JobManager) StartExec(ctx context.Context, instanceID, lockFilePath, jobType string, cmd *exec.Cmd) (jobID string, err error) {
+	jobStarted := false
+
 	jobID = MakeJobID(jobType)
 	logFilePath := filepath.Join(cmd.Dir, "jobs", jobID+".log")
 	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+
+	// if jobStarted == true then the cmd is already running in a go-routine
+	// and therefore deletion of logFile and lockFile is now job of that go-routine
+	defer func() {
+		if !jobStarted {
+			if logFile != nil {
+				logFile.Close()
+				if err := os.Remove(logFilePath); err != nil {
+					log.LogError("Failed to remove lock file after Start", "err", err)
+				}
+			}
+			if err := os.Remove(lockFilePath); err != nil {
+				log.LogError("Failed to remove lock file after Start", "err", err)
+			}
+		}
+	}()
 	if err != nil {
 		return "", err
 	}
 
+	// for now we duplicate all output to stdout and stderr
 	wout := io.MultiWriter(logFile, os.Stdout)
 	werr := io.MultiWriter(logFile, os.Stderr)
 
@@ -262,13 +266,10 @@ func (m *JobManager) StartExec(ctx context.Context, instanceID, lockFilePath, jo
 	}
 
 	if err := cmd.Start(); err != nil {
-		logFile.Close()
-		os.Remove(logFilePath)
-		if err := os.Remove(lockFilePath); err != nil {
-			log.LogError("Failed to remove lock file after Start", "err", err)
-		}
 		return "", err
 	}
+
+	jobStarted = true
 
 	rec := &JobRecord{
 		Status: JobStatus{
@@ -286,20 +287,10 @@ func (m *JobManager) StartExec(ctx context.Context, instanceID, lockFilePath, jo
 	m.jobs[jobKey(instanceID, jobID)] = rec
 	m.mu.Unlock()
 
-	if err := m.dumpJobs(); err != nil {
-		logFile.Close()
-		if err := os.Remove(lockFilePath); err != nil {
-			log.LogError("Failed to remove lock file after dumpjobs", "err", err)
-		}
-		return "", err
-	}
-
 	go func() {
 		defer func() {
 			logFile.Close()
 			if err := os.Remove(lockFilePath); err != nil {
-				fmt.Println(instanceID)
-				fmt.Println(jobType)
 				log.LogError("Failed to remove lock file after the script is done", "err", err)
 			}
 		}()
@@ -321,23 +312,20 @@ func (m *JobManager) StartExec(ctx context.Context, instanceID, lockFilePath, jo
 		}
 	}()
 
+	// TODO: this does not prevent running the app
+	// maybe we should have multiple attempts at saving it in go routine
+	if err := m.dumpJobs(); err != nil {
+		log.LogError("cannot persist job state after running it it", "err", err, "jobID", jobID)
+	}
+
 	return jobID, nil
 }
-
-// Job state is persisted as a single JSON file: a map from key(instanceID, id) to a record. It
-// exists so that job/status is answerable after a daemon restart, which is also why loading it is
-// not a plain unmarshal -- a daemon that died mid-job leaves records that claim work is still in
-// progress, and those have to be reconciled before the file is believed.
-//
-// The paths inside a record are stored relative to pathsRoot rather than absolutely, so a state
-// file survives its tree being moved or copied. absPath and relPath are the two directions of that
-// conversion.
 
 // Load restores job state from disk, repairing anything a previous daemon left unfinished.
 //
 // Call this once at startup, before serving. It must happen before any job is started, because
 // repairInterruptedJob's correctness depends on no job having been spawned yet in this process.
-func (m *JobManager) Load() error {
+func (m *JobManager) LoadJobs() error {
 	data, err := os.ReadFile(m.JobsDBpath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

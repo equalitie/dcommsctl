@@ -31,7 +31,7 @@ func InstanceCreate(instancesDir string, appName string) (string, error) {
 	var pathToInst string
 
 	// FIXME: find a better way to specify single-instance apps
-	if appName == "dawa" || appName == "metrics" {
+	if appName == "caddy" || appName == "dawa" || appName == "metrics" {
 		pathToInst = path.Join(instancesDir, appName)
 	} else {
 		instanceID := appName + "-" + instanceGenID()
@@ -55,6 +55,18 @@ func InstanceCreate(instancesDir string, appName string) (string, error) {
 		return "", fmt.Errorf("create instance dir: %s", err)
 	}
 	return pathToInst, nil
+}
+
+func InstanceExists(instancesDir, appName string) bool {
+	if _, err := os.Stat(path.Join(instancesDir, appName)); err != nil {
+		if os.IsExist(err) {
+			return true
+		}
+
+		return false
+	} else {
+		return true
+	}
 }
 
 func InstanceSetup(appName, instancesDir string, config InstanceGenericConfig) (string, error) {

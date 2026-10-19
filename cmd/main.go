@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -50,45 +51,117 @@ func initApps(ctx context.Context, app *api.GlobalState) error {
 	cmd := exec.CommandContext(ctx, "./scripts/docker_setup.sh")
 
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("containers setup failed %s: %s", err, out)
+		return fmt.Errorf("containers setup failed %s: \n%s", err, out)
 	}
 
-	if _, err := app.InstanceInstall(ctx, api.InstanceInstallArgs{
-		AppName:    "caddy",
-		DomainName: app.SystemCfg.DomainName,
-	}); err != nil {
-		return err
-	}
-
-	caddyStartResult, err := app.InstanceStart(ctx, api.InstanceStartArgs{
-		InstanceID: "caddy",
-	})
+	res, err := app.InstancesList(ctx, api.InstancesListArgs{})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to fetch installed instances %s", err)
 	}
 
-	if err := pollJobStatus(ctx, app, caddyStartResult.JobID); err != nil {
-		return err
+	caddyRunning := false
+	caddyInstalled := false
+	dawaRunning := false
+	dawaInstalled := false
+	metricsRunning := false
+	metricsInstalled := false
+
+	for _, i := range res.Instances {
+		if i.App == "caddy" {
+			caddyInstalled = true
+			caddyRunning = i.Status == "running"
+		}
+		if i.App == "dawa" {
+			dawaInstalled = true
+			dawaRunning = i.Status == "running"
+		}
+		if i.App == "metrics" {
+			metricsInstalled = true
+			metricsRunning = i.Status == "running"
+		}
 	}
 
-	// FIXME: ping the caddy to make sure it's up, sometimes we fail here
-	// because dawa asks too early to add a route
+	if !caddyRunning {
 
-	// FIXME: get the actual port
-	log.LogInfo("Caddy should be running on port :8000 (SSL on port :3443 for localhost only)")
+		if !caddyInstalled {
+			portHTTP, _ := json.Marshal(app.ProxyCfg.HTTPPort)
+			portHTTPS, _ := json.Marshal(app.ProxyCfg.HTTPSPort)
 
-	if app.SystemCfg.SkipDawa {
-		log.LogInfo("Skipping Dawa initial install")
-	} else {
-		dawaResult, err := app.InstanceInstall(ctx, api.InstanceInstallArgs{
-			AppName:    "dawa",
-			DomainName: "dawa." + app.SystemCfg.DomainName,
+			if _, err := app.InstanceInstall(ctx, api.InstanceInstallArgs{
+				AppName:    "caddy",
+				DomainName: app.SystemCfg.DomainName,
+				Variables: map[string]json.RawMessage{
+					"PORT_HTTP":  portHTTP,
+					"PORT_HTTPS": portHTTPS,
+				},
+			}); err != nil {
+				return err
+			}
+		}
+
+		caddyStartResult, err := app.InstanceStart(ctx, api.InstanceStartArgs{
+			InstanceID: "caddy",
 		})
 		if err != nil {
 			return err
 		}
-		if err := pollJobStatus(ctx, app, dawaResult.JobID); err != nil {
+
+		if err := pollJobStatus(ctx, app, caddyStartResult.JobID); err != nil {
 			return err
+		}
+	}
+
+	if app.SystemCfg.SkipDawa {
+		log.LogInfo("Skipping Dawa initial install")
+	} else {
+
+		if !dawaRunning {
+			if !dawaInstalled {
+				dawaResult, err := app.InstanceInstall(ctx, api.InstanceInstallArgs{
+					AppName:    "dawa",
+					DomainName: "dawa." + app.SystemCfg.DomainName,
+				})
+				if err != nil {
+					return err
+				}
+				if dawaResult.JobID != "" {
+					if err := pollJobStatus(ctx, app, dawaResult.JobID); err != nil {
+						return err
+					}
+				}
+
+			}
+
+			if _, err := app.InstanceExpose(ctx, api.InstanceExposeArgs{InstanceID: "dawa"}); err != nil {
+				return err
+			}
+
+			startResult, err := app.InstanceStart(ctx, api.InstanceStartArgs{InstanceID: "dawa"})
+			if err != nil {
+				return err
+			}
+			if startResult.JobID != "" {
+				if err := pollJobStatus(ctx, app, startResult.JobID); err != nil {
+					return err
+				}
+			}
+		}
+
+		if !metricsRunning {
+			if !metricsInstalled {
+				metricsResult, err := app.InstanceInstall(ctx, api.InstanceInstallArgs{
+					AppName: "metrics",
+				})
+				if err != nil {
+					return err
+				}
+
+				if metricsResult.JobID != "" {
+					if err := pollJobStatus(ctx, app, metricsResult.JobID); err != nil {
+						return err
+					}
+				}
+			}
 		}
 	}
 
@@ -181,17 +254,24 @@ func main() {
 
 	if environment != "production" {
 		environment = "development"
-		app.ProxyCfg.HTTPPort = 8000
-		app.ProxyCfg.HTTPSPort = 3443
+		if proxyHTTPPort == "" {
+			app.ProxyCfg.HTTPPort = 8000
+		}
+		if proxyHTTPSPort == "" {
+			app.ProxyCfg.HTTPSPort = 3443
+		}
+	} else {
+
+		if proxyHTTPPort == "" {
+			app.ProxyCfg.HTTPPort = 80
+		}
+
+		if proxyHTTPSPort == "" {
+			app.ProxyCfg.HTTPSPort = 443
+		}
 	}
 
-	if proxyHTTPPort == "" {
-		app.ProxyCfg.HTTPPort = 80
-	}
-
-	if proxyHTTPSPort == "" {
-		app.ProxyCfg.HTTPSPort = 443
-	}
+	app.ProxyCfg.PlainHTTP = (app.SystemCfg.DomainName == "localhost")
 
 	if err := initApps(rootContext, app); err != nil {
 		panic(err)

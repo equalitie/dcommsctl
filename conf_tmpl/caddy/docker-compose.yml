@@ -8,6 +8,13 @@ services:
   caddy:
     image: caddy:2.10.2
     command: ["caddy", "run", "--config", "/etc/caddy/caddy.json"]
+    # we are immediately calling Caddy API, so this healthcheck here is to make sure it's up
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--output", "/dev/null", "http://localhost:2019/config/"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
     volumes:
       - caddy_data:/data
       - caddy_config:/config
@@ -18,10 +25,10 @@ services:
       - proxy
     ports:
       - target: 80
-        published: {{ .HTTPPort }}
+        published: "${PORT_HTTP}"
         protocol: tcp
       - target: 443
-        published: {{ .HTTPSPort }}
+        published: "${PORT_HTTPS}"
         protocol: tcp
       - target: 8448
         published: 8448

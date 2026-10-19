@@ -1,6 +1,7 @@
 {
     "id": "peertube",
     "name": "Peertube",
+    "single_instance": false,
     "version": "production-bookworm",
     "redirect_uri": "/tmp_redirect",
     "description": "Federated video hosting, streaming and live broadcasting.",

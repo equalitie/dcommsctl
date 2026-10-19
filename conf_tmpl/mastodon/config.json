@@ -1,6 +1,7 @@
 {
     "id": "mastodon",
     "name": "Mastodon",
+    "single_instance": false,
     "version": "4.5",
     "redirect_uri": "/auth/auth/openid_connect/callback",
     "description": "Federated microblogging server.",

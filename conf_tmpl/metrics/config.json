@@ -1,0 +1,14 @@
+{
+    "id": "metrics",
+    "name": "Metrics package",
+    "single_instance": true,
+    "version": "0.0.1",
+    "redirect_uri": "/tmp_redirect",
+    "definition_url": "https://gitlab.equalit.ie/dcomms/dcommsctl/-/tree/main/conf_tmpl/metrics",
+    "updated_at": "2026-09-14T23:08:31+02:00",
+    "releases": [
+        {
+            "version": "0.0.1"
+        }
+    ]
+}
