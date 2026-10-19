@@ -8,6 +8,7 @@ import (
 )
 
 type SystemConfig struct {
+	Environment  string
 	DomainName   string
 	SSODomain    string
 	BaseDataPath string

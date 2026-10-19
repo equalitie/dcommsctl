@@ -152,14 +152,7 @@ func main() {
 	baseDataPath := flag.String("path", ".", "Path to store all the data (instances, backups, job database)")
 	flag.Parse()
 
-	webDomain := os.Getenv("DCOMMS_WEB_DOMAIN")
-
-	if webDomain == "" {
-		webDomain = "localhost"
-	}
-
 	app := api.NewGlobalState(rootContext)
-	app.SystemCfg.DomainName = webDomain
 	app.SystemCfg.SkipDawa = *skipDawa
 	app.SystemCfg.BaseDataPath, _ = filepath.Abs(*baseDataPath)
 	app.SystemCfg.InstancesDir = filepath.Join(app.SystemCfg.BaseDataPath, "./.instances")
@@ -167,6 +160,38 @@ func main() {
 	app.SystemCfg.BackupsDir = filepath.Join(app.SystemCfg.BaseDataPath, "./.backups")
 	app.JobsManager.JobsDBpath = filepath.Join(app.SystemCfg.BaseDataPath, "./.jobs_db.json")
 	app.JobsManager.JobsPath = filepath.Join(app.SystemCfg.BaseDataPath, "./.jobs")
+
+	webDomain := os.Getenv("DCOMMS_WEB_DOMAIN")
+
+	if webDomain == "" {
+		webDomain = "localhost"
+	}
+	app.SystemCfg.DomainName = webDomain
+
+	addr := os.Getenv("WEBHOST_PORT")
+
+	if addr == "" {
+		addr = "0.0.0.0:6006"
+	}
+
+	proxyHTTPPort := os.Getenv("DCOMMS_PROXY_HTTP_PORT")
+	proxyHTTPSPort := os.Getenv("DCOMMS_PROXY_HTTPS_PORT")
+
+	environment := os.Getenv("DCOMMS_ENV")
+
+	if environment != "production" {
+		environment = "development"
+		app.ProxyCfg.HTTPPort = 8000
+		app.ProxyCfg.HTTPSPort = 3443
+	}
+
+	if proxyHTTPPort == "" {
+		app.ProxyCfg.HTTPPort = 80
+	}
+
+	if proxyHTTPSPort == "" {
+		app.ProxyCfg.HTTPSPort = 443
+	}
 
 	if err := initApps(rootContext, app); err != nil {
 		panic(err)
@@ -207,12 +232,6 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.Handle("/ws", jRPCServer.Handler())
-
-	addr := os.Getenv("WEBHOST_PORT")
-
-	if addr == "" {
-		addr = "0.0.0.0:6006"
-	}
 
 	server := &http.Server{
 		Addr:         addr,
