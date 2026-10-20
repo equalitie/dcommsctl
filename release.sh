@@ -78,4 +78,5 @@ for arch in $ARCHES; do
   echo "    $(cat "$DIST/$tarball.sha256")"
 done
 
-echo "done: upload everything in $DIST to the URL in kDcommsctlDownloadUrl"
+echo "done. next: in dcomms-app run 'dart run tool/export_install_sh.dart' for the paste-mode install.sh,"
+echo "then upload the $VERSION tarballs, their .sha256 files and install.sh to the URL in kDcommsctlDownloadUrl"
