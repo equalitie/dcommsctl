@@ -234,6 +234,13 @@ func main() {
 	app.JobsManager.JobsDBpath = filepath.Join(app.SystemCfg.BaseDataPath, "./.jobs_db.json")
 	app.JobsManager.JobsPath = filepath.Join(app.SystemCfg.BaseDataPath, "./.jobs")
 
+	// A fresh install has none of the data folders yet.
+	for _, dir := range []string{app.SystemCfg.InstancesDir, app.SystemCfg.BackupsDir, app.JobsManager.JobsPath} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			panic(err)
+		}
+	}
+
 	webDomain := os.Getenv("DCOMMS_WEB_DOMAIN")
 
 	if webDomain == "" {
