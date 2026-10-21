@@ -29,7 +29,7 @@ func (app *GlobalState) InstanceUninstall(ctx context.Context, args InstanceUnin
 		return InstanceUninstallResult{}, fmt.Errorf("The job is in progress")
 	}
 
-	cmdArgs := []string{"compose", "down"}
+	cmdArgs := []string{"compose", "down", "-v", "--remove-orphans"}
 
 	cmd := exec.CommandContext(app.JobsManager.Context(), "docker", cmdArgs...)
 	cmd.Dir = instanceDir
