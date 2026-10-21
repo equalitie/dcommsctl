@@ -24,8 +24,10 @@ services:
       - peertube_data:/data
       - peertube_config:/config
     depends_on:
-      - peertube-postgres
-      - peertube-redis
+      peertube-postgres:
+        condition: service_healthy
+      peertube-redis:
+        condition: service_started
     networks:
       proxy:
           aliases:
@@ -45,6 +47,13 @@ services:
     env_file: ./.env
     environment:
       - 'POSTGRES_HOST_AUTH_METHOD=trust'
+    # Over TCP: the first-run init server listens on the socket only, so it does not count as ready.
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
     volumes:
       - peertube_db:/var/lib/postgresql/data
     networks:
