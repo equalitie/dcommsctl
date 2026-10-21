@@ -927,7 +927,7 @@
           if (result.instances) {
             let html = '<table>';
             for (const inst of result.instances) {
-              html += `<tr><td>${inst.id}</td><td>${inst.app}</td><td><a href="https://${inst.domain}:3443">${inst.domain}</a></td><td>${inst.status}</td><td>${inst.version}</td><td><button onclick="sendStart('${inst.id}')">start</button><button onclick="sendStop('${inst.id}')">stop</button><button onclick="sendBackup('${inst.id}')">backup</button><button onclick="initRestore('${inst.id}')">Restore</button><button onclick="exposeInstance('${inst.id}')">expose</button></td></tr>`;
+              html += `<tr><td>${inst.id}</td><td>${inst.app}</td><td><a href="https://${inst.domain}:3443">${inst.domain}</a></td><td>${inst.status}</td><td>${inst.version}</td><td><button onclick="sendStart('${inst.id}')">start</button><button onclick="sendStop('${inst.id}')">stop</button><button onclick="sendBackup('${inst.id}')">backup</button><button onclick="initRestore('${inst.id}')">Restore</button><button onclick="exposeInstance('${inst.id}')">expose</button><button onclick="uninstallInstance('${inst.id}')">uninstall</button></td></tr>`;
             }
 
             html += '</table>';
@@ -1047,7 +1047,7 @@
         });
       }
 
-      function sendUninstall() {
+      function uninstallInstance(instanceId) {
         send('inst/uninstall', {
           id: instanceId
         });
@@ -1365,12 +1365,14 @@
             <span>Instance Manager</span><span>Simple tools. Your infrastructure.</span>
           </footer>
         </main>
-        <dialog id="restore-dialog" class="restore-dialog"
+        <dialog id="restore-dialog"
+                class="restore-dialog"
                 aria-labelledby="restore-dialog-heading"
                 aria-describedby="restore-dialog-description">
           <form onsubmit="submitRestore(event)">
             <h2 id="restore-dialog-heading">Restore an instance</h2>
-            <p id="restore-dialog-description" class="restore-dialog-description">Choose a backup to bring this instance back to a saved state.</p>
+            <p id="restore-dialog-description"
+               class="restore-dialog-description">Choose a backup to bring this instance back to a saved state.</p>
             <div class="field">
               <label for="restore-instance-id">Instance ID</label>
               <input id="restore-instance-id" type="text" readonly spellcheck="false">
@@ -1379,9 +1381,14 @@
               <label for="restore-backup-id">Backup</label>
               <select id="restore-backup-id" required disabled></select>
             </div>
-            <p id="restore-status" class="dialog-status" role="status" aria-live="polite"></p>
+            <p id="restore-status"
+               class="dialog-status"
+               role="status"
+               aria-live="polite"></p>
             <div class="dialog-actions">
-              <button id="restore-cancel" type="button" onclick="document.getElementById('restore-dialog').close()">Cancel</button>
+              <button id="restore-cancel"
+                      type="button"
+                      onclick="document.getElementById('restore-dialog').close()">Cancel</button>
               <button id="restore-submit" class="button-primary" type="submit" disabled>Restore</button>
             </div>
           </form>
