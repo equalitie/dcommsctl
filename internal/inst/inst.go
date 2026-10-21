@@ -19,6 +19,8 @@ type InstanceGenericConfig struct {
 	Domain       string
 	OnionDomain  string
 	Version      string
+	// not sure if this is should be available for every instance, right now it is only used for Caddy
+	PlainHTTP bool
 	// we support ports via that for now
 	Env map[string]string
 }

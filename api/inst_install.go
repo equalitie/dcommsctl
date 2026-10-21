@@ -83,6 +83,7 @@ func (app *GlobalState) InstanceInstall(ctx context.Context, args InstanceInstal
 		Domain:       args.DomainName,
 		Env:          envVars,
 		Version:      appConfig.Version,
+		PlainHTTP:    app.ProxyCfg.PlainHTTP,
 	}
 	instanceDir, err := inst.InstanceSetup(args.AppName, app.SystemCfg.InstancesDir, instConfig)
 	if err != nil {
