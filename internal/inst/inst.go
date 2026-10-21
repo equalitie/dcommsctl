@@ -84,7 +84,7 @@ func InstanceSetup(appName, instancesDir string, config InstanceGenericConfig) (
 
 	config.InstanceID = instanceID
 
-	excludedFiles := []string{".env", "config.json"}
+	excludedFiles := []string{"config.json"}
 
 	appFiles, err := os.ReadDir(pathToApp)
 	if err != nil {
@@ -115,14 +115,6 @@ func InstanceSetup(appName, instancesDir string, config InstanceGenericConfig) (
 	}
 
 	envFilePath := path.Join(pathToInst, ".env")
-
-	if err := WriteFileTemplate(
-		path.Join(pathToApp, ".env"),
-		envFilePath,
-		&config,
-	); err != nil {
-		return "", err
-	}
 
 	appendEnv, err := godotenv.Marshal(config.Env)
 	if err != nil {
