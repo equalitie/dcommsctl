@@ -34,6 +34,12 @@ services:
       peertube: {}
     restart: "always"
 
+    labels:
+      dc_app: peertube
+      dc_name: peertube-back
+      dc_version: "{{ .Version }}"
+      dc_inst: "{{ .InstanceID }}"
+
   peertube-postgres:
     image: postgres:13-alpine
     env_file: ./.env
@@ -44,6 +50,11 @@ services:
     networks:
       - peertube-int
     restart: "always"
+    labels:
+      dc_app: peertube
+      dc_name: peertube-postgres
+      dc_version: "{{ .Version }}"
+      dc_inst: "{{ .InstanceID }}"
 
   peertube-redis:
     image: redis:6-alpine
@@ -52,4 +63,9 @@ services:
     networks:
       - peertube-int
     restart: "always"
+    labels:
+      dc_app: peertube
+      dc_name: peertube-redis
+      dc_version: "{{ .Version }}"
+      dc_inst: "{{ .InstanceID }}"
 
