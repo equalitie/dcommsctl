@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -278,7 +279,9 @@ func main() {
 		}
 	}
 
-	app.ProxyCfg.PlainHTTP = (app.SystemCfg.DomainName == "localhost")
+	// No certificate can be issued for localhost or a LAN address, so the installer asks for plain HTTP there.
+	plainHTTP, _ := strconv.ParseBool(os.Getenv("DCOMMS_PLAIN_HTTP"))
+	app.ProxyCfg.PlainHTTP = plainHTTP || app.SystemCfg.DomainName == "localhost"
 
 	if err := initApps(rootContext, app); err != nil {
 		panic(err)
