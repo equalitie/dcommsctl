@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"eq/dcommsctl/internal/tools"
 )
 
 type ApplicationConfig struct {
@@ -79,6 +81,7 @@ func ValidateParamsAgainstConfig(
 	data map[string]json.RawMessage,
 	config ApplicationConfig,
 ) (map[string]string, map[string]string, error) {
+	var err error
 	commonVars := make(map[string]string, len(config.Variables))
 	installOnlyVars := make(map[string]string, len(config.Variables))
 
@@ -93,7 +96,14 @@ func ValidateParamsAgainstConfig(
 					return nil, nil, fmt.Errorf("%s: default cannot be empty", name)
 				}
 			case field.Required:
-				return nil, nil, fmt.Errorf("%s: required", name)
+				if field.Type == "port" {
+					raw, err = json.Marshal(tools.PortRandom())
+					if err != nil {
+						return nil, nil, fmt.Errorf("%s: failed to generate a random port for a port value", name)
+					}
+				} else {
+					return nil, nil, fmt.Errorf("%s: required", name)
+				}
 			default:
 				continue
 			}
