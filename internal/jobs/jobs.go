@@ -315,13 +315,13 @@ func (m *JobManager) StartExec(ctx context.Context, instanceID, lockFilePath, jo
 	// TODO: this does not prevent running the app
 	// maybe we should have multiple attempts at saving it in go routine
 	if err := m.dumpJobs(); err != nil {
-		log.LogError("cannot persist job state after running it it", "err", err, "jobID", jobID)
+		log.LogError("cannot persist job state after starting it", "err", err, "jobID", jobID)
 	}
 
 	return jobID, nil
 }
 
-// Load restores job state from disk, repairing anything a previous daemon left unfinished.
+// LoadJobs restores job state from disk, repairing anything a previous daemon left unfinished.
 //
 // Call this once at startup, before serving. It must happen before any job is started, because
 // repairInterruptedJob's correctness depends on no job having been spawned yet in this process.
@@ -436,12 +436,10 @@ func repairInterruptedJob(jobKey string, rec *JobRecord) {
 		return
 	}
 
-	// if !rec.markInterrupted(reason) {
-	// 	return
-	// }
+	rec.Status.State = JobFailed
+	rec.Status.Error = reason
+	rec.Status.FinishedAt = time.Now().Format(time.RFC3339)
 
-	// `reason` rather than Status.Error: markInterrupted overwrote the error, so the pre-repair
-	// state is not kept and the reason is the whole explanation.
 	log.LogWarn("repaired a job left active by a previous daemon",
 		"job", jobKey, "reason", reason, "log", rec.LogFilePath)
 
