@@ -13,16 +13,16 @@ type ApplicationConfig struct {
 	SingleInstance bool `json:"single_instance"`
 	LastUpdated    string
 	Version        string
-	Variables      map[string]appVariable `json:"variables"`
+	Variables      map[string]AppVariable `json:"variables"`
 }
 
-type appVariable struct {
+type AppVariable struct {
 	Type        string          `json:"type"`
-	Required    bool            `json:"required"`
-	Default     json.RawMessage `json:"default"`
-	DisplayName string          `json:"display_name"`
-	Description string          `json:"description"`
-	InstallOnly bool            `json:"install_only"`
+	Required    bool            `json:"required,omitempty"`
+	Default     json.RawMessage `json:"default,omitempty"`
+	DisplayName string          `json:"display_name,omitempty"`
+	Description string          `json:"description,omitempty"`
+	InstallOnly bool            `json:"install_only,omitempty"`
 }
 
 func LoadConfig(path string) (ApplicationConfig, error) {

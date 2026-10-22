@@ -20,12 +20,13 @@ type Release struct {
 
 // Summary shape returned by apps/list.
 type ApplicationInfo struct {
-	Id          string `json:"id"`
-	Name        string `json:"name"`
-	Version     string `json:"version"`
-	RedirectURL string `json:"redirect_uri"`
-	Description string `json:"description,omitempty"`
-	UpdatedAt   string `json:"updated_at,omitempty"`
+	Id          string                             `json:"id"`
+	Name        string                             `json:"name"`
+	Version     string                             `json:"version"`
+	RedirectURL string                             `json:"redirect_uri"`
+	Description string                             `json:"description,omitempty"`
+	UpdatedAt   string                             `json:"updated_at,omitempty"`
+	Variables   map[string]application.AppVariable `json:"variables,omitempty"`
 }
 
 // Full shape returned by apps/get. Embeds the summary so the two cannot drift.
